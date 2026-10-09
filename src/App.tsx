@@ -1067,6 +1067,7 @@ function ReadingView({
   const [size, setSize] = useState({ width: 0, height: 0 });
   const viewport = useRef<HTMLDivElement>(null);
   const pointer = useRef<{ x: number; y: number } | null>(null);
+  const wheel = useRef({ distance: 0, lastEventAt: 0, lastTurnAt: -Infinity });
   const lastSaved = useRef("");
   const migratedBookmarks = useRef(false);
   const {
@@ -1183,6 +1184,80 @@ function ReadingView({
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [advance, panel, vertical]);
+  useEffect(() => {
+    const element = viewport.current!;
+    const state = wheel.current;
+    state.distance = 0;
+    const handler = (event: WheelEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.altKey ||
+        event.shiftKey ||
+        panel ||
+        document.querySelector("dialog[open]") ||
+        (event.target instanceof Element &&
+          event.target.closest(
+            "input,select,textarea,button,a,[contenteditable]",
+          ))
+      ) {
+        state.distance = 0;
+        return;
+      }
+      if (
+        !Number.isFinite(event.deltaY) ||
+        event.deltaY === 0 ||
+        Math.abs(event.deltaX) > Math.abs(event.deltaY)
+      )
+        return;
+      // A wheel turn pages the reading viewport; it must not also scroll its ancestors.
+      if (event.cancelable) event.preventDefault();
+      const now = performance.now();
+      if (loading || error || !page) {
+        state.distance = 0;
+        return;
+      }
+      // Wheel deltas can use pixels, lines or whole pages, depending on the device.
+      const unit =
+        event.deltaMode === WheelEvent.DOM_DELTA_LINE
+          ? Math.max(40, settings.fontSize * settings.lineHeight)
+          : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+            ? element.clientHeight
+            : 1;
+      const distance = event.deltaY * unit;
+      if (
+        now - state.lastEventAt > 180 ||
+        Math.sign(state.distance) !== Math.sign(distance)
+      )
+        state.distance = 0;
+      state.lastEventAt = now;
+      // Discard momentum during the cooldown rather than queueing additional pages.
+      if (now - state.lastTurnAt < 300) {
+        state.distance = 0;
+        return;
+      }
+      state.distance += distance;
+      if (Math.abs(state.distance) < 40) return;
+      const forward = state.distance > 0;
+      state.distance = 0;
+      if (!(forward ? nextAnchor : previousAnchor)) return;
+      state.lastTurnAt = now;
+      advance(forward);
+    };
+    element.addEventListener("wheel", handler, { passive: false });
+    return () => element.removeEventListener("wheel", handler);
+  }, [
+    advance,
+    panel,
+    loading,
+    error,
+    page,
+    nextAnchor,
+    previousAnchor,
+    settings.fontSize,
+    settings.lineHeight,
+  ]);
   const addBookmark = () => {
     if (!page) return;
     const current = readerStorage.getRecord(book.id) || {
