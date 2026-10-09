@@ -2,7 +2,11 @@
 
 Aozora-stone-readerは、青空文庫の作品を縦書き・横書きで読めるブラウザ向けリーダーです。React・TypeScript・Viteで構築し、両方向の本文組版に [stone-engine.js](https://github.com/non-standardworld/stone_engine_js) を使っています。
 
-初版の20作品、本文計613,774文字を同梱しています。本棚、読書画面、設定、目次、しおりを実装済みで、GitHub Pages用の公開ワークフローを用意しています。公開先の確定と初回デプロイはこれからです。
+初版の20作品、本文計613,774文字を同梱しています。本棚、読書画面、設定、目次、しおりを実装し、GitHub Pagesで公開しています。
+
+- [公開サイトを開く](https://hhungry2.github.io/Aozora-stone-reader/)
+- [『蜘蛛の糸』を読む](https://hhungry2.github.io/Aozora-stone-reader/#/read/000092)
+- [GitHubリポジトリ](https://github.com/hhungry2/Aozora-stone-reader)
 
 [初版の実装と検証記録](docs/implementation-notes.md) に、仕様との対応、自動確認した範囲、実機・読み上げなど残る確認を掲載しています。
 
@@ -91,7 +95,7 @@ python -m unittest discover -s scripts -p test_gaiji.py
 
 ## GitHub Pagesへ公開
 
-[公開ワークフロー](.github/workflows/pages.yml) は、`main` へのpushまたは `main` 上での手動実行で依存パッケージをインストールし、単体テストとビルドを実行して `dist/` をGitHub Pagesへ配信します。リポジトリの **Settings → Pages → Build and deployment → Source** で **GitHub Actions** を選んで使用します。
+[公開ワークフロー](.github/workflows/pages.yml) は、`main` へのpushまたは `main` 上での手動実行で依存パッケージをインストールし、単体テストとビルドを実行して `dist/` をGitHub Pagesへ配信します。公開リポジトリ `hhungry2/Aozora-stone-reader` は **GitHub Actions** を配信元に設定済みで、`main` へのpushが公開サイトへ自動反映されます。別のリポジトリで使用する場合は、**Settings → Pages → Build and deployment → Source** で **GitHub Actions** を選んでください。
 
 Pagesのサブパスはワークフローが `VITE_BASE_PATH` へ渡します。画面のURLはハッシュ形式のため、作品への直接リンクを開いてもGitHub Pages側のルート設定は不要です。別の静的ホストでサブパスを指定する場合も、ビルド時に `VITE_BASE_PATH` を設定できます。
 
