@@ -99,6 +99,33 @@ for (const direction of ['tbRl', 'lrTb'] as const) describe(`Stone pagination ${
     expect(engine.windowSize).toBeLessThanOrEqual(12000);
   });
 
+  it('reserves a full character for an image even when the font measures its placeholder at zero', () => {
+    const fixed = new FixedMeasurer();
+    const measurer = {
+      advance: (...args: Parameters<FixedMeasurer['advance']>) => args[2] === '\ufffc' ? 0 : fixed.advance(...args),
+      metrics: fixed.metrics.bind(fixed),
+    };
+    const book = fixture([{
+      text: '\ufffc陀多と云う男。',
+      inlineImages: [{ start: 0, end: 1, src: 'data/assets/test.png', alt: '外字', sourceUrl: '' }],
+      rubies: [{ start: 0, end: 3, reading: 'かんだた' }],
+    }]);
+    const page = new PaginationEngine(book, { ...defaultSettings, direction, fontSize: 28 }, 320, 370, measurer).pageAtPosition(0);
+    const [placeholder, next] = page.context.runs;
+    const image = page.images[0];
+    expect(placeholder.advance).toBe(28);
+    expect(placeholder.line).toBe(next.line);
+    if (direction === 'tbRl') {
+      expect(placeholder.frame.height).toBe(28);
+      expect(image.y + image.height).toBeLessThanOrEqual(next.frame.y);
+    } else {
+      expect(placeholder.frame.width).toBe(28);
+      expect(image.x + image.width).toBeLessThanOrEqual(next.frame.x);
+    }
+    expect(page.text).toBe(book.blocks[0].text);
+    expect(page.rubies[0].reading).toBe('かんだた');
+  });
+
   it('gives standalone illustrations a page while keeping every separator', () => {
     const book = fixture([{ text: '挿絵の前。' }, {
       kind: 'image', text: '\ufffc', image: { src: 'data/assets/picture.png', alt: '山の挿絵', sourceUrl: '' },

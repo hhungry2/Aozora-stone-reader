@@ -28,7 +28,15 @@ ROOT = Path(__file__).resolve().parents[1]
 CACHE = ROOT / ".cache" / "aozora"
 DATA = ROOT / "public" / "data"
 CSV_URL = "https://www.aozora.gr.jp/index_pages/list_person_all_extended_utf8.zip"
-VERSION = "aozora-xhtml-1.0.0"
+VERSION = "aozora-xhtml-1.1.0"
+GAIJI_ENCODING = "euc_jis_2004"
+GAIJI_REFERENCE = "https://docs.python.org/3/library/codecs.html#standard-encodings"
+GAIJI_PATH = re.compile(r"^/gaiji/([12])-(\d{2})/([12])-(\d{2})-(\d{2})\.png$")
+GAIJI_NOTE = re.compile(r"(?<![0-9-])([12])-(\d{1,2})-(\d{1,2})(?![0-9-])")
+# CPython also accepts JIS X 0212 in otherwise unassigned plane-2 rows. Aozora
+# gaiji paths describe JIS X 0213, so those fallback rows must not be converted.
+# Standard table: https://x0213.org/codetable/euc-jis-2004-std.txt
+JIS_X0213_PLANE2_ROWS = {1, 3, 4, 5, 8, 12, 13, 14, 15, *range(78, 95)}
 # Explicit IDs avoid accidentally switching editions when the official index grows.
 SELECTION = (
     ("000127", "羅生門"), ("000042", "鼻"), ("000092", "蜘蛛の糸"),
@@ -125,11 +133,50 @@ def decode_source(raw: bytes) -> tuple[str, str]:
     return text, encoding
 
 
-def logical_text(node: Tag) -> str:
+def unicode_gaiji(tag: Tag, source_url: str) -> dict[str, str] | None:
+    if "gaiji" not in tag.get("class", []):
+        return None
+    url = urllib.parse.urljoin(source_url, str(tag.get("src", "")))
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme != "https" or parsed.netloc != "www.aozora.gr.jp" or parsed.query or parsed.fragment:
+        return None
+    path = GAIJI_PATH.fullmatch(parsed.path)
+    if path is None:
+        return None
+    directory_plane, directory_row, plane, row, cell = map(int, path.groups())
+    if (directory_plane, directory_row) != (plane, row):
+        return None
+    if not 1 <= row <= 94 or not 1 <= cell <= 94:
+        return None
+    if plane == 2 and row not in JIS_X0213_PLANE2_ROWS:
+        return None
+    note = str(tag.get("alt", ""))
+    codes = {tuple(map(int, match)) for match in GAIJI_NOTE.findall(note)}
+    # A canonical official gaiji URL identifies the JIS cell on its own. When
+    # the original note also names a cell, it must agree with that URL.
+    if codes and codes != {(plane, row, cell)}:
+        raise ValueError(f"Gaiji image and source annotation disagree: {url} {note!r}")
+    encoded = bytes(([0x8f] if plane == 2 else []) + [row + 0xa0, cell + 0xa0])
+    try:
+        character = encoded.decode(GAIJI_ENCODING, errors="strict")
+    except UnicodeDecodeError:
+        return None
+    if not character or "\ufffd" in character:
+        return None
+    return {
+        "character": character,
+        "codePoint": " ".join(f"U+{ord(value):04X}" for value in character),
+        "jisCode": f"{plane}-{row}-{cell}", "encoding": GAIJI_ENCODING,
+        "referenceUrl": GAIJI_REFERENCE, "sourceUrl": url, "sourceNote": note,
+    }
+
+
+def logical_text(node: Tag, source_url: str, *, normalize_gaiji: bool = True) -> str:
     """Independent text oracle: remove readings and preserve every source glyph.
 
     Structural boundaries and HTML whitespace do not count as glyphs. Images are
-    represented by one object-replacement character, exactly as in TextBlock.
+    represented by one object-replacement character, except for verified Unicode
+    gaiji mappings. The original unnormalized stream is also retained in audits.
     """
     duplicate = copy.deepcopy(node)
     for unwanted in list(duplicate.find_all(["rt", "rp", "script", "style"])):
@@ -137,7 +184,8 @@ def logical_text(node: Tag) -> str:
     for comment in duplicate.find_all(string=lambda item: isinstance(item, Comment)):
         comment.extract()
     for picture in duplicate.find_all("img"):
-        picture.replace_with("\ufffc")
+        replacement = unicode_gaiji(picture, source_url) if normalize_gaiji else None
+        picture.replace_with(replacement["character"] if replacement else "\ufffc")
     return ASCII_SPACE.sub("", duplicate.get_text())
 
 
@@ -152,6 +200,7 @@ class Converter:
         self.blocks: list[dict[str, Any]] = []
         self.warnings: set[str] = set()
         self.images: dict[str, dict[str, str]] = {}
+        self.normalized_gaiji: list[dict[str, Any]] = []
         self.text = ""
         self.rubies: list[dict[str, Any]] = []
         self.emphasis: list[dict[str, Any]] = []
@@ -226,6 +275,11 @@ class Converter:
             return
         if name == "img":
             start = self.offset
+            replacement = unicode_gaiji(node, self.source_url)
+            if replacement:
+                self.append(replacement["character"])
+                self.normalized_gaiji.append({**replacement, "blockId": f"b{len(self.blocks) + 1:05d}", "start": start, "end": self.offset})
+                return
             asset = self.image(node)
             self.append("\ufffc")
             self.inline_images.append({**asset, "start": start, "end": self.offset})
@@ -274,7 +328,7 @@ class Converter:
         self.visit(body)
         self.flush()
         actual = ASCII_SPACE.sub("", "".join(block["text"] for block in self.blocks))
-        expected = logical_text(body)
+        expected = logical_text(body, self.source_url)
         if actual != expected:
             mismatch = next((i for i, (a, b) in enumerate(zip(actual, expected)) if a != b), min(len(actual), len(expected)))
             raise ValueError(f"Source completeness check failed at glyph {mismatch}: {actual[mismatch:mismatch+30]!r} vs {expected[mismatch:mismatch+30]!r}")
@@ -332,7 +386,11 @@ def import_book(identifier: str, title: str, rows: list[dict[str, str]], fetcher
     character_count = sum(len(block["text"]) for block in blocks)
     if character_count > 80000:
         features.append("長編")
-    version_payload = {"version": VERSION, "source": sha256(raw), "metadata": matches}
+    # Preserve existing reading versions for works whose output is unchanged.
+    version_payload = {"version": "aozora-xhtml-1.0.0", "source": sha256(raw), "metadata": matches}
+    previous_content_version = sha256(json.dumps(version_payload, ensure_ascii=False, sort_keys=True).encode())[:16]
+    if converter.normalized_gaiji:
+        version_payload["gaijiUnicode"] = converter.normalized_gaiji
     content_version = sha256(json.dumps(version_payload, ensure_ascii=False, sort_keys=True).encode())[:16]
     entry = {
         "id": identifier, "title": title, "titleKana": row["作品名読み"],
@@ -348,22 +406,29 @@ def import_book(identifier: str, title: str, rows: list[dict[str, str]], fetcher
         **entry, "schemaVersion": 1, "blocks": blocks, "toc": toc,
         "credits": credits.get_text("\n", strip=True),
         "source": {"url": url, "fetchedAt": fetched_at, "sha256": sha256(raw), "encoding": encoding},
-        "conversion": {"version": VERSION, "warnings": sorted(converter.warnings)},
+        "conversion": {"version": VERSION, "warnings": sorted(converter.warnings), "normalizedGaiji": converter.normalized_gaiji},
     }
+    if converter.normalized_gaiji:
+        book["conversion"]["sourcePlaceholderVersion"] = previous_content_version
+        if all(utf16_length(item["character"]) == 1 for item in converter.normalized_gaiji):
+            book["conversion"]["positionCompatibleVersions"] = [previous_content_version]
     audit = {
         "id": identifier, "title": title, "orthography": row["文字遣い種別"],
         "workCopyright": row["作品著作権フラグ"],
         "people": [{"id": value["人物ID"], "copyright": value["人物著作権フラグ"], "role": value["役割フラグ"]} for value in matches],
-        "sourceGlyphCount": len(logical_text(bodies[0])),
-        "sourceGlyphSha256": sha256(logical_text(bodies[0]).encode()),
+        "sourceGlyphCount": len(logical_text(bodies[0], url)),
+        "sourceGlyphSha256": sha256(logical_text(bodies[0], url).encode()),
+        "sourceLiteralGlyphSha256": sha256(logical_text(bodies[0], url, normalize_gaiji=False).encode()),
         "rubyCount": sum(len(block["rubies"]) for block in blocks),
         "sourceRubyCount": len(bodies[0].find_all("ruby")),
         "sourceRubySha256": ruby_fingerprint([
-            (logical_text(ruby.find("rb")), ruby.find("rt").get_text().strip())
+            (logical_text(ruby.find("rb"), url), ruby.find("rt").get_text().strip())
             for ruby in bodies[0].find_all("ruby")
         ]),
         "imageCount": sum(len(block["inlineImages"]) for block in blocks),
         "sourceImageCount": len(bodies[0].find_all("img")),
+        "normalizedGaijiCount": len(converter.normalized_gaiji),
+        "sourceNormalizedGaijiCount": sum(unicode_gaiji(picture, url) is not None for picture in bodies[0].find_all("img")),
     }
     validate_book(book, audit)
     return book, audit
@@ -378,7 +443,11 @@ def validate_book(book: dict[str, Any], audit: dict[str, Any]) -> None:
     logical = ASCII_SPACE.sub("", "".join(block["text"] for block in book["blocks"]))
     if len(logical) != audit["sourceGlyphCount"] or sha256(logical.encode()) != audit["sourceGlyphSha256"]:
         raise ValueError("Content differs from independently extracted source glyph stream")
-    if audit["rubyCount"] != audit["sourceRubyCount"] or audit["imageCount"] != audit["sourceImageCount"]:
+    normalized_gaiji = book["conversion"].get("normalizedGaiji", [])
+    normalized_count = audit.get("normalizedGaijiCount", 0)
+    if normalized_count != audit.get("sourceNormalizedGaijiCount", 0) or len(normalized_gaiji) != normalized_count:
+        raise ValueError("Unicode gaiji count differs from source")
+    if audit["rubyCount"] != audit["sourceRubyCount"] or audit["imageCount"] + normalized_count != audit["sourceImageCount"]:
         raise ValueError("Ruby/image count differs from source")
     ruby_pairs = []
     for block in book["blocks"]:
@@ -410,6 +479,35 @@ def validate_book(book: dict[str, Any], audit: dict[str, Any]) -> None:
                         raise ValueError("Missing image glyph or bundled asset")
     if ruby_fingerprint(ruby_pairs) != audit["sourceRubySha256"]:
         raise ValueError("Ruby readings or their base glyphs differ from source")
+    original_text = {block["id"]: block["text"] for block in book["blocks"]}
+    seen_gaiji = set()
+    # Offsets refer to the converted text: reverse from the end of each block so
+    # supplementary characters and combining sequences cannot shift later ranges.
+    for item in sorted(normalized_gaiji, key=lambda value: (value["blockId"], value["start"]), reverse=True):
+        position = (item["blockId"], item["start"], item["end"])
+        source_tag = BeautifulSoup("<img class='gaiji'>", "html.parser").img
+        source_tag["src"], source_tag["alt"] = item["sourceUrl"], item["sourceNote"]
+        mapping = unicode_gaiji(source_tag, book["source"]["url"])
+        if position in seen_gaiji or item["blockId"] not in original_text or mapping is None:
+            raise ValueError("Invalid Unicode gaiji provenance or duplicate position")
+        seen_gaiji.add(position)
+        if any(item.get(key) != value for key, value in mapping.items()) or item["end"] != item["start"] + utf16_length(item["character"]):
+            raise ValueError("Unicode gaiji differs from verified mapping")
+        encoded = original_text[item["blockId"]].encode("utf-16-le")
+        start, stop = item["start"] * 2, item["end"] * 2
+        if not 0 <= start < stop <= len(encoded):
+            raise ValueError("Unicode gaiji range is outside its block")
+        if encoded[start:stop].decode("utf-16-le") != item["character"]:
+            raise ValueError("Unicode gaiji range does not contain its character")
+        original_text[item["blockId"]] = (encoded[:start] + "\ufffc".encode("utf-16-le") + encoded[stop:]).decode("utf-16-le")
+    if "sourceLiteralGlyphSha256" in audit:
+        literal = ASCII_SPACE.sub("", "".join(original_text[block["id"]] for block in book["blocks"]))
+        if sha256(literal.encode()) != audit["sourceLiteralGlyphSha256"]:
+            raise ValueError("Reversing Unicode gaiji does not recover the literal source glyph stream")
+    if normalized_gaiji:
+        compatible = book["conversion"].get("positionCompatibleVersions", [])
+        if compatible and (compatible != [book["conversion"].get("sourcePlaceholderVersion")] or any(utf16_length(item["character"]) != 1 for item in normalized_gaiji)):
+            raise ValueError("Position compatibility declared for a changed UTF-16 layout")
     for item in book["toc"]:
         if item["blockId"] not in ids:
             raise ValueError("Broken TOC target")
@@ -421,17 +519,25 @@ def write_report(books: list[dict[str, Any]], audits: list[dict[str, Any]], inde
         "初期本棚は20作品。公式の書誌CSVで作品と関係人物の著作権フラグがすべて「なし」の版だけを収録した。新字新仮名を優先し、該当版のない『富嶽百景』は新字旧仮名を採用した。",
         "", f"- 公式CSV: {index['url']}", f"- 取得: {index['fetchedAt']}",
         f"- CSV ZIP SHA-256: `{index['sha256']}`", f"- 変換器: `{VERSION}`", "",
-        "作品本文は原XHTMLを厳密にShift_JISデコードし、ルビの読みと括弧を除いた本文を抽出した。改行・HTMLの空白を除く独立した本文抽出結果と、JSON全ブロックを連結した結果のSHA-256・文字数が一致することを検証している。各ルビの親文字と読みの組を原文から独立抽出して照合し、ルビ・画像数の一致、UTF-16の範囲とサロゲート境界、画像の同梱、目次リンク、文字化け置換文字の不在も自動検査した。校訂注記は本文中に保持する。",
+        "作品本文は原XHTMLを厳密にShift_JISデコードし、ルビの読みと括弧を除いた本文を抽出した。下記のJIS面区点による外字変換を適用した独立本文抽出結果と、JSON全ブロックを連結した結果のSHA-256・文字数が一致することを検証している。Unicodeへ変換した位置をU+FFFCに戻し、変換前の原文指紋に一致することも検証した。各ルビの親文字と読みの組を原文から独立抽出して照合し、ルビ数・原画像数（同梱画像＋Unicode変換数）の一致、UTF-16の範囲とサロゲート境界、画像の同梱、目次リンク、文字化け置換文字の不在も自動検査した。校訂注記は本文中に保持する。",
         "", "| ID | 作品 | 著者 | 本文文字数 | ルビ | 外字画像 | 見出し | 表記 |",
         "| --- | --- | --- | ---: | ---: | ---: | ---: | --- |",
     ]
     for book, audit in zip(books, audits):
         report.append(f"| {book['id']} | [{book['title']}]({book['cardUrl']}) | {book['authorLabel']} | {book['characterCount']:,} | {audit['rubyCount']:,} | {audit['imageCount']} | {len(book['toc'])} | {audit['orthography']} |")
+    report += ["", "## JIS面区点からUnicodeへの自動変換", "", "`class=gaiji` の原画像について、公式HTTPSオリジン・`gaiji/面-区/面-区-点.png` のディレクトリとファイル名が一致し、1/2面・区点1〜94の範囲にある場合を変換候補にする。原XHTMLにも面区点注記がある場合はURLとの一致を必須とし、不一致は取り込みを中止する。面2はJIS X 0213の割当区（1、3〜5、8、12〜15、78〜94）のみを認め、Python標準コーデックによるJIS X 0212へのフォールバックを除外する。Python標準の `euc_jis_2004` で厳密にデコードできる対応をUnicodeへ変換する。非公式URLはUnicode変換の対象外とし、画像取得も既存の公式HTTPSオリジン制限に従って拒否する。公式画像のパスが変換条件に合わない場合や、規格外の区・未定義の対応は、既存の画像処理へ渡す。変換文字・Unicodeコードポイント列・JIS面区点・使用コーデック・元画像URL・元注記・根拠URL・変換後のブロック内UTF-16範囲を各作品JSONの `conversion.normalizedGaiji` に記録する。本文・ルビ・傍点・残る画像の範囲は変換後のUTF-16長で再計算する。", "", "| 作品 | 原画像・JIS面区点 | Unicode | 箇所 | 根拠 |", "| --- | --- | --- | ---: | --- |"]
+    for book in books:
+        normalized = book["conversion"]["normalizedGaiji"]
+        for url in dict.fromkeys(item["sourceUrl"] for item in normalized):
+            items = [item for item in normalized if item["sourceUrl"] == url]
+            item = items[0]
+            report.append(f"| {book['title']} | [{item['jisCode']}]({url}) | {item['character']} ({item['codePoint']}) | {len(items)} | [Python標準JIS X 0213:2004対応]({item['referenceUrl']}) |")
+    report += ["", "対応表の参照先は [Project X0213のEUC-JIS-2004対Unicode表](https://x0213.org/codetable/euc-jis-2004-std.txt)。取り込み時はネットワーク上の表に依存せず、Python標準コーデックと上記の割当区ガードで変換する。", "", "補助漢字や結合文字列はUTF-16長が増えるため、逆変換検証では同一ブロック内を末尾から処理する。`conversion.sourcePlaceholderVersion` に変換前のU+FFFC本文のバージョンを記録し、全変換がUTF-16で1単位の場合だけ `positionCompatibleVersions` に同バージョンを登録する。ブロック境界はすべて保持する。『蜘蛛の糸』の犍陀多の「犍」は16×16ピクセルの画像を拡大せず、本文フォントで表示する。"]
     report += ["", "## 再実行", "", "```powershell", "python -m pip install -r scripts/requirements.txt", "python scripts/import_books.py", "python scripts/import_books.py --offline", "python scripts/import_books.py --validate-only", "```", "", "通常のWebビルドでは取り込み処理を実行せず、ネットワークなしで同梱JSONを使う。原文・書誌CSV・原画像と取得メタデータは `.cache/aozora/` に保存する。`--refresh` で公式データを再取得する。選定作品は変換器内の作品IDと題名で固定する。公開JSONには作品別の出典URL・取得日時・原文SHA-256・底本・入力者・校正者を保持し、`public/data/import-manifest.json` にはCSVの著作権フラグと完全性検査結果を記録する。", "", "## 配置を簡略化した箇所", ""]
     for book in books:
         if book["conversion"]["warnings"]:
             report.append(f"- {book['title']}: " + "／".join(book["conversion"]["warnings"]))
-    report += ["", "字下げはブロック属性に保持し、外字は原画像を同梱して本文のU+FFFC位置に対応づけた。配置簡略化の警告は本文の省略を意味しない。連続する空行による版面上の間隔は段落境界へ統合した。今後の再取り込みで曖昧なルビ構造・デコード失敗・著作権フラグ不一致・本文欠落を検出した場合、公開JSON更新を中止する。", "", "## 出典・利用条件", "", "[青空文庫収録ファイルの取り扱い規準](https://www.aozora.gr.jp/guide/kijyunn.html) に従い、作品の底本・入力・校正情報と原文出典を保持する。書誌CSV由来のメタデータは青空文庫提供、[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/deed.ja)。本アプリによる変更はXHTMLからJSONへの変換、段落化、注記範囲化、画像の同梱である。", ""]
+    report += ["", "字下げはブロック属性に保持し、変換できない外字は原画像を同梱して本文のU+FFFC位置に対応づけた。配置簡略化の警告は本文の省略を意味しない。連続する空行による版面上の間隔は段落境界へ統合した。今後の再取り込みで曖昧なルビ構造・デコード失敗・著作権フラグ不一致・本文欠落を検出した場合、公開JSON更新を中止する。", "", "## 出典・利用条件", "", "[青空文庫収録ファイルの取り扱い規準](https://www.aozora.gr.jp/guide/kijyunn.html) に従い、作品の底本・入力・校正情報と原文出典を保持する。書誌CSV由来のメタデータは青空文庫提供、[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/deed.ja)。本アプリによる変更はXHTMLからJSONへの変換、段落化、注記範囲化、画像の同梱、JIS面区点を使った外字のUnicode化である。", ""]
     (ROOT / "docs" / "import-report.md").write_text("\n".join(report), encoding="utf-8")
 
 

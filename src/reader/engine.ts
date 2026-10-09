@@ -279,6 +279,9 @@ export class PaginationEngine {
       .map((r) => ({ start: Math.max(0, r.start - start), end: r.end - start, fontWeight: 700 }));
     applyFontStyleSpans(context, styles);
     measureRuns(context);
+    // Canvas can report a zero advance for the object-replacement character. The
+    // image is drawn at 1em, so reserve that same space before layout and wrapping.
+    for (const run of context.runs) if (run.char === '\ufffc') run.advance = fontSize;
     layoutBlocks(context, this.index, start, end, offsets, rubies, bodyWidth, bodyHeight);
     let cutoff = context.runs.findIndex((run) => vertical ? run.frame.x < -0.01 : run.frame.y + run.frame.height > bodyHeight + 0.01);
     if (cutoff < 0) cutoff = context.runs.length;

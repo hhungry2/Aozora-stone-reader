@@ -153,6 +153,59 @@ describe('stable reading anchors', () => {
     expect(updated.blocks[0].text.slice(restored.anchor.offset)).toBe(saved.context);
   });
 
+  it('keeps the exact reading and bookmark position for an explicitly compatible gaiji normalization', () => {
+    const original = book([block('first', '冒頭。'), block('saved', 'すると\ufffc陀多がいた。')]);
+    const saved = createAnchor(original, 'saved', 3);
+    const updated = {
+      ...book([block('first', '冒頭。'), block('saved', 'すると犍陀多がいた。')], 'v2'),
+      conversion: { positionCompatibleVersions: ['v1'] },
+    };
+    expect(restoreAnchor(updated, saved, 'v1')).toMatchObject({
+      anchor: { blockId: 'saved', offset: 3, context: '犍陀多がいた。' },
+      adjusted: false, reason: 'exact',
+    });
+    expect(restoreAnchor(updated, saved, 'unrelated-version')).toMatchObject({
+      anchor: { blockId: 'first', offset: 0 }, adjusted: true, reason: 'start',
+    });
+  });
+
+  it('maps source-edition anchors across supplementary, combining and BMP gaiji', () => {
+    const original = book([block('saved', '前\ufffc中\ufffc後\ufffc終')]);
+    const updated = {
+      ...book([block('saved', '前𤄃中か\u309a後犍終')], 'v2'),
+      conversion: {
+        sourcePlaceholderVersion: 'v1',
+        normalizedGaiji: [
+          { blockId: 'saved', start: 7, end: 8, character: '犍' },
+          { blockId: 'saved', start: 1, end: 3, character: '𤄃' },
+          { blockId: 'saved', start: 4, end: 6, character: 'か\u309a' },
+        ],
+      },
+    };
+    for (const [before, after] of [[0, 0], [1, 1], [2, 3], [3, 4], [4, 6], [5, 7], [6, 8], [7, 9]]) {
+      const result = restoreAnchor(updated, createAnchor(original, 'saved', before), 'v1');
+      expect(result).toEqual({ anchor: createAnchor(updated, 'saved', after), adjusted: before !== after, reason: 'exact' });
+    }
+  });
+
+  it('uses gaiji offset mapping only for the recorded source edition', () => {
+    const updated = {
+      ...book([block('chapter', '第二章', 'heading'), block('saved', '前𤄃中')], 'v2'),
+      conversion: {
+        sourcePlaceholderVersion: 'v1',
+        normalizedGaiji: [{ blockId: 'saved', start: 1, end: 3, character: '𤄃' }],
+      },
+    };
+    const saved = { blockId: 'saved', offset: 1, context: '\ufffc中' };
+    expect(restoreAnchor(updated, saved, 'unrelated-version')).toMatchObject({
+      anchor: { blockId: 'chapter', offset: 0 }, adjusted: true, reason: 'heading',
+    });
+    updated.conversion.normalizedGaiji[0].end = 2;
+    expect(restoreAnchor(updated, saved, 'v1')).toMatchObject({
+      anchor: { blockId: 'chapter', offset: 0 }, adjusted: true, reason: 'heading',
+    });
+  });
+
   it('falls back to a preceding heading for ambiguous text instead of rebinding a bookmark', () => {
     const updated = book([block('chapter', '第二章', 'heading'), block('saved', '同じ文章。同じ文章。')], 'v2');
     const result = restoreAnchor(updated, { blockId: 'saved', offset: 0, context: '同じ文章。' }, 'v1');

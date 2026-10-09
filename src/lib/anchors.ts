@@ -1,6 +1,10 @@
-import type { Anchor, Book, TextBlock } from '../types';
+import type { Anchor, Book, GaijiNormalization, TextBlock } from '../types';
 
-type AnchorBook = Pick<Book, 'blocks' | 'contentVersion' | 'toc'>;
+type AnchorBook = Pick<Book, 'blocks' | 'contentVersion' | 'toc'> & {
+  conversion?: Pick<Book['conversion'], 'positionCompatibleVersions' | 'sourcePlaceholderVersion'> & {
+    normalizedGaiji?: Pick<GaijiNormalization, 'blockId' | 'start' | 'end' | 'character'>[];
+  };
+};
 export interface RestoredAnchor {
   anchor: Anchor;
   adjusted: boolean;
@@ -49,12 +53,44 @@ function nearestHeading(book: AnchorBook, blockIndex: number): TextBlock | undef
   return undefined;
 }
 
+/** Map an offset from the exact source edition that used one U+FFFC per gaiji. */
+function normalizedOffset(book: AnchorBook, block: TextBlock, offset: number): number | undefined {
+  const changes = book.conversion?.normalizedGaiji;
+  if (!changes) return undefined;
+  const replacements = changes.filter((change) => change.blockId === block.id).sort((a, b) => a.start - b.start);
+  let previousEnd = 0;
+  for (const change of replacements) {
+    if (!Number.isInteger(change.start) || !Number.isInteger(change.end)
+      || change.start < previousEnd || change.end <= change.start || change.end > block.text.length
+      || block.text.slice(change.start, change.end) !== change.character) return undefined;
+    previousEnd = change.end;
+  }
+  const sourceOffset = Number.isFinite(offset) ? Math.max(0, Math.floor(offset)) : 0;
+  let growth = 0;
+  for (const change of replacements) {
+    const sourceStart = change.start - growth;
+    if (sourceOffset <= sourceStart) break;
+    growth += change.end - change.start - 1;
+  }
+  return sourceOffset + growth;
+}
+
 export function restoreAnchor(book: AnchorBook, saved: Anchor, previousContentVersion: string): RestoredAnchor {
   const blockIndex = book.blocks.findIndex((block) => block.id === saved.blockId);
   const block = book.blocks[blockIndex];
-  if (book.contentVersion === previousContentVersion && block) {
+  const samePositions = book.contentVersion === previousContentVersion
+    || book.conversion?.positionCompatibleVersions?.includes(previousContentVersion);
+  if (samePositions && block) {
     const anchor = anchorFor(block, saved.offset);
     return { anchor, adjusted: anchor.offset !== saved.offset, reason: 'exact' };
+  }
+
+  if (book.conversion?.sourcePlaceholderVersion === previousContentVersion && block) {
+    const offset = normalizedOffset(book, block, saved.offset);
+    if (offset !== undefined) {
+      const anchor = anchorFor(block, offset);
+      return { anchor, adjusted: anchor.offset !== saved.offset, reason: 'exact' };
+    }
   }
 
   // After an update, accept a context only when it identifies one position.

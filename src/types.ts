@@ -40,6 +40,19 @@ export interface InlineImage extends ImageAsset {
   end: number;
 }
 
+export interface GaijiNormalization {
+  blockId: string;
+  start: number;
+  end: number;
+  character: string;
+  codePoint: string;
+  jisCode: string;
+  encoding: string;
+  referenceUrl: string;
+  sourceUrl: string;
+  sourceNote: string;
+}
+
 export interface TextBlock {
   id: string;
   kind: "paragraph" | "heading" | "image" | "note";
@@ -58,7 +71,13 @@ export interface Book extends CatalogEntry {
   toc: { title: string; blockId: string; level: number }[];
   credits: string;
   source: { url: string; fetchedAt: string; sha256: string; encoding: string };
-  conversion: { version: string; warnings: string[] };
+  conversion: {
+    version: string;
+    warnings: string[];
+    normalizedGaiji?: GaijiNormalization[];
+    sourcePlaceholderVersion?: string;
+    positionCompatibleVersions?: string[];
+  };
 }
 
 export interface Anchor {

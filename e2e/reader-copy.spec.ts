@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import type { Book } from '../src/types';
 
 test('copying a page or a selected passage preserves source text without ruby or remaining pages', async ({ page }) => {
   await page.goto('/#/read/000127');
@@ -64,6 +65,22 @@ test('copying a page or a selected passage preserves source text without ruby or
 });
 
 test('a gaiji inside ruby retains both its image description and reading for screen readers', async ({ page }) => {
+  await page.route('**/data/books/000624.json', async route => {
+    const response = await route.fetch();
+    const book = await response.json() as Book;
+    const block = book.blocks.find(block => block.rubies.some(ruby => ruby.reading === 'かくりゃく'))!;
+    const ruby = block.rubies.find(ruby => ruby.reading === 'かくりゃく')!;
+    // The corpus now contains Unicode gaiji. Inject the former BMP image fallback
+    // without shifting the ruby, so this accessibility case remains covered.
+    expect(block.text.slice(ruby.start, ruby.start + 1)).toBe('虢');
+    block.text = block.text.slice(0, ruby.start) + '\ufffc' + block.text.slice(ruby.start + 1);
+    block.inlineImages = [{
+      start: ruby.start, end: ruby.start + 1, src: 'data/images/0ec5460b77a424bd.png',
+      sourceUrl: 'https://www.aozora.gr.jp/gaiji/1-91/1-91-48.png',
+      alt: '※(「埒のつくり＋虎」、第3水準1-91-48)',
+    }];
+    await route.fulfill({ response, json: book });
+  });
   await page.goto('/#/read/000624');
   const rendered = page.getByTestId('reader-page');
   await expect(rendered.locator('svg')).toBeVisible();
