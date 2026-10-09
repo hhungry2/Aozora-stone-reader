@@ -87,6 +87,10 @@ export function ReaderPage({ page, settings, className }: { page: ReaderPageData
       aria-hidden="true" focusable="false" data-stone-direction={settings.direction} data-start={page.globalStart} data-end={page.globalEnd}
       style={{ display: 'block', overflow: 'visible', userSelect: 'text', maxWidth: '100%' }}>
       <g transform={`translate(${page.insetX} ${page.insetY})`}>
+        {settings.showFrames && <g className="reader-glyph-frames" fill="none" stroke="rgba(0,128,255,0.6)" strokeWidth="0.7" pointerEvents="none" style={{ userSelect: 'none' }}>
+          {page.context.runs.filter((run) => !run.isNewline).map((run, index) => <rect key={index}
+            x={run.frame.x} y={run.frame.y} width={run.frame.width} height={run.frame.height} />)}
+        </g>}
         <Glyphs glyphs={page.glyphs} />
         <g className="reader-rubies" style={{ userSelect: 'none' }}>{page.rubies.map((ruby) => <g key={ruby.key}
           transform={`translate(${ruby.x} ${ruby.y}) scale(${ruby.scaleX} ${ruby.scaleY})`}>

@@ -86,11 +86,58 @@ export interface Anchor {
   context: string;
 }
 
+export const fontFamilies = {
+  serif:
+    '"Yu Mincho", "Hiragino Mincho ProN", "Noto Serif CJK JP", "MS PMincho", serif',
+  sans: '"Yu Gothic", "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", sans-serif',
+  "noto-sans": '"Noto Sans JP", "Yu Gothic", sans-serif',
+  "noto-serif": '"Noto Serif JP", "Yu Mincho", serif',
+  "zen-kaku": '"Zen Kaku Gothic New", "Yu Gothic", sans-serif',
+  shippori: '"Shippori Mincho", "Yu Mincho", serif',
+  "hiragino-sans":
+    '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif',
+  "hiragino-serif": '"Hiragino Mincho ProN", "Noto Serif JP", serif',
+};
+
+export const japaneseFontOptions = [
+  ["noto-sans", "Noto Sans JP"],
+  ["noto-serif", "Noto Serif JP"],
+  ["zen-kaku", "Zen Kaku Gothic New"],
+  ["shippori", "Shippori Mincho"],
+  ["hiragino-sans", "ヒラギノ角ゴ（macOS）"],
+  ["hiragino-serif", "ヒラギノ明朝（macOS）"],
+  ["serif", "端末の明朝体"],
+  ["sans", "端末のゴシック体"],
+] as const;
+
+export const latinFontFamilies = {
+  helvetica: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+  times: '"Times New Roman", Times, serif',
+  georgia: "Georgia, serif",
+  same: "",
+};
+
+export const latinFontOptions = [
+  ["helvetica", "Helvetica Neue"],
+  ["times", "Times New Roman"],
+  ["georgia", "Georgia"],
+  ["same", "和文フォントと同じ"],
+] as const;
+
 export interface ReaderSettings {
   direction: "tbRl" | "lrTb";
   fontSize: number;
   lineHeight: number;
-  font: "serif" | "sans";
+  font: keyof typeof fontFamilies;
+  latinFont: keyof typeof latinFontFamilies;
+  latinScale: number;
+  punctuationMode: "stone" | "whole" | "half";
+  textAlign: "leading" | "center" | "trailing" | "justify";
+  directionAlign: "start" | "middle" | "end";
+  kinsoku: boolean;
+  dividesByWords: boolean;
+  allowsTateChuYoko: boolean;
+  showFrames: boolean;
   theme: "paper" | "light" | "dark";
   ruby: boolean;
 }
@@ -115,12 +162,15 @@ export const defaultSettings: ReaderSettings = {
   fontSize: 20,
   lineHeight: 1.9,
   font: "serif",
+  latinFont: "helvetica",
+  latinScale: 0.95,
+  punctuationMode: "stone",
+  textAlign: "leading",
+  directionAlign: "start",
+  kinsoku: true,
+  dividesByWords: true,
+  allowsTateChuYoko: true,
+  showFrames: false,
   theme: "paper",
   ruby: true,
-};
-
-export const fontFamilies = {
-  serif:
-    '"Yu Mincho", "Hiragino Mincho ProN", "Noto Serif CJK JP", "MS PMincho", serif',
-  sans: '"Yu Gothic", "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", sans-serif',
 };

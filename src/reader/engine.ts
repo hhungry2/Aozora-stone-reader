@@ -3,7 +3,14 @@ import {
   parseText, splitGraphemes, StoneContext,
   type FontMeasurer, type GlyphElement, type Run, type Token,
 } from '@non-standardworld/stone-engine.js';
-import { fontFamilies, type Anchor, type Book, type ReaderSettings, type TextBlock } from '../types';
+import { fontFamilies, latinFontFamilies, type Anchor, type Book, type ReaderSettings, type TextBlock } from '../types';
+
+function readerFonts(settings: ReaderSettings) {
+  return {
+    japanese: { family: fontFamilies[settings.font] },
+    latin: { family: latinFontFamilies[settings.latinFont] || fontFamilies[settings.font], scale: settings.latinScale },
+  };
+}
 
 export interface BookRange {
   block: TextBlock;
@@ -230,7 +237,7 @@ export class PaginationEngine {
     readonly measurer: FontMeasurer = new FixedMeasurer(),
   ) {
     this.index = indexBook(book);
-    const line = settings.fontSize * Math.max(1.9, settings.lineHeight);
+    const line = settings.fontSize * settings.lineHeight;
     this.windowSize = Math.max(512, Math.min(12000, Math.ceil(width * height / (settings.fontSize * line) * 3) + 256));
   }
 
@@ -263,14 +270,15 @@ export class PaginationEngine {
     const text = this.index.text.slice(start, end);
     const context = new StoneContext({
       direction: this.settings.direction, fontSize,
-      lineHeightScale: Math.max(1.9, this.settings.lineHeight),
-      punctuationMode: 'stone', kinsoku: true, dividesByWords: true,
-      allowsTateChuYoko: true, textAlign: 'leading',
-      fonts: { japanese: { family: fontFamilies[this.settings.font] }, latin: { family: fontFamilies[this.settings.font], scale: 1 } },
+      lineHeightScale: this.settings.lineHeight,
+      punctuationMode: this.settings.punctuationMode, kinsoku: this.settings.kinsoku,
+      dividesByWords: this.settings.dividesByWords, allowsTateChuYoko: this.settings.allowsTateChuYoko,
+      textAlign: this.settings.textAlign, directionAlign: this.settings.directionAlign,
+      fonts: readerFonts(this.settings),
     }, this.measurer);
     // The progression axis is unlimited. Stone therefore never replaces source text with an ellipsis.
     context.renderSize = vertical ? { width: Infinity, height: bodyHeight } : { width: bodyWidth, height: Infinity };
-    const parsed = parseText(text, true);
+    const parsed = parseText(text, this.settings.dividesByWords);
     context.runs = parsed.runs;
     context.tokens = parsed.tokens;
     const offsets = runOffsets(context.runs);
@@ -293,6 +301,15 @@ export class PaginationEngine {
     context.runs = context.runs.slice(0, cutoff);
     context.tokens = context.tokens.filter((token) => token.start < cutoff).map((token) => ({ ...token, end: Math.min(token.end, cutoff) }));
     context.runs.forEach((run) => { run.visibility = 'visible'; });
+    // Align only the retained page, after cutting the unlimited layout window.
+    // Aligning that whole window would shift later text onto the current page.
+    if (context.runs.length && this.settings.directionAlign !== 'start') {
+      const fraction = this.settings.directionAlign === 'middle' ? 0.5 : 1;
+      const low = Math.min(...context.runs.map((run) => vertical ? run.frame.x : run.frame.y));
+      const high = Math.max(...context.runs.map((run) => vertical ? run.frame.x + run.frame.width : run.frame.y + run.frame.height));
+      const spare = Math.max(0, (vertical ? bodyWidth : bodyHeight) - (high - low));
+      for (const run of context.runs) translateRun(run, vertical ? -spare * fraction : 0, vertical ? 0 : spare * fraction);
+    }
     const pageEnd = start + consumed;
     const page: ReaderPageData = {
       start: anchorAt(this.index, start), end: anchorAt(this.index, pageEnd),
@@ -337,7 +354,7 @@ export class PaginationEngine {
         const rubyContext = new StoneContext({
           direction: this.settings.direction, fontSize: f * 0.5, lineHeightScale: 1,
           kinsoku: false, dividesByWords: false, allowsTateChuYoko: false,
-          fonts: { japanese: { family: fontFamilies[this.settings.font] }, latin: { family: fontFamilies[this.settings.font], scale: 1 } },
+          fonts: readerFonts(this.settings),
         }, this.measurer);
         const parsed = parseText(part, false); rubyContext.runs = parsed.runs; rubyContext.tokens = parsed.tokens;
         measureRuns(rubyContext); new Layouter(rubyContext).layout();

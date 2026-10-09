@@ -15,6 +15,89 @@ function fixture(blocks: Partial<TextBlock>[]): Book {
 }
 
 for (const direction of ['tbRl', 'lrTb'] as const) describe(`Stone pagination ${direction}`, () => {
+  it('changes punctuation cell widths and keeps kinsoku optional', () => {
+    const book = fixture([{ text: '「日本語」。' }]);
+    const whole = new PaginationEngine(book, { ...defaultSettings, direction, punctuationMode: 'whole' }, 320, 370).pageAtPosition(0);
+    const half = new PaginationEngine(book, { ...defaultSettings, direction, punctuationMode: 'half' }, 320, 370).pageAtPosition(0);
+    const axis = direction === 'tbRl' ? 'height' : 'width';
+    expect(whole.context.runs[0].frame[axis]).toBeCloseTo(20);
+    expect(half.context.runs[0].frame[axis]).toBeCloseTo(10);
+    const shortLine = fixture([{ text: 'あああ。次' }]);
+    const pages = [false, true].map((kinsoku) => new PaginationEngine(shortLine, {
+      ...defaultSettings, direction, punctuationMode: 'whole', dividesByWords: false, kinsoku,
+    }, direction === 'tbRl' ? 200 : 76, direction === 'tbRl' ? 76 : 200).pageAtPosition(0));
+    expect(pages[0].context.runs[3].line).toBeGreaterThan(pages[0].context.runs[2].line);
+    expect(pages[1].context.runs[3].line).toBe(pages[1].context.runs[2].line);
+  });
+
+  it('positions short text at the selected inline and page alignment', () => {
+    const book = fixture([{ text: '短い文' }]);
+    const coordinate = direction === 'tbRl' ? 'y' : 'x';
+    const inline = ['leading', 'center', 'trailing'].map((textAlign) => new PaginationEngine(book, {
+      ...defaultSettings, direction, textAlign: textAlign as 'leading' | 'center' | 'trailing',
+    }, 320, 370).pageAtPosition(0));
+    const positions = inline.map((page) => page.context.runs[0].frame[coordinate]);
+    expect(positions[0]).toBeCloseTo(0);
+    expect(positions[1]).toBeGreaterThan(positions[0]);
+    expect(positions[2]).toBeCloseTo(positions[1] * 2);
+    const blockCoordinate = direction === 'tbRl' ? 'x' : 'y';
+    const block = ['start', 'middle', 'end'].map((directionAlign) => new PaginationEngine(book, {
+      ...defaultSettings, direction, directionAlign: directionAlign as 'start' | 'middle' | 'end',
+    }, 320, 370).pageAtPosition(0));
+    const starts = block.map((page) => page.context.runs[0].frame[blockCoordinate]);
+    expect(Math.abs(starts[2] - starts[0])).toBeGreaterThan(100);
+    expect(starts[1]).toBeCloseTo((starts[0] + starts[2]) / 2);
+    expect(block.every((page) => page.text === '短い文')).toBe(true);
+  });
+
+  it('uses the requested tight line spacing and independent Latin scale', () => {
+    const book = fixture([{ text: 'あ' }, { text: 'いA' }]);
+    const page = new PaginationEngine(book, { ...defaultSettings, direction, lineHeight: 1.8, latinFont: 'georgia', latinScale: 0.8 }, 320, 370).pageAtPosition(0);
+    const first = page.context.runs.find((run) => run.char === 'あ')!;
+    const next = page.context.runs.find((run) => run.char === 'い')!;
+    expect(Math.abs(direction === 'tbRl' ? first.frame.x - next.frame.x : next.frame.y - first.frame.y)).toBeCloseTo(36);
+    const latin = page.glyphs.find((glyph) => glyph.text === 'A')!;
+    expect(latin.fontFamily).toBe('Georgia, serif');
+    expect(latin.fontSize).toBeCloseTo(16);
+    expect(page.glyphs.find((glyph) => glyph.text === 'あ')!.fontSize).toBe(20);
+  });
+
+  it('preserves all text across pages with nondefault typography', () => {
+    const book = fixture([{ text: '「組版。」日本語 English 12月。𤄃か\u309a\n'.repeat(45), rubies: [{ start: 1, end: 3, reading: 'くみはん' }] }]);
+    for (const directionAlign of ['start', 'middle', 'end'] as const) {
+      const engine = new PaginationEngine(book, { ...defaultSettings, direction, directionAlign,
+        fontSize: 29, lineHeight: 1.25, punctuationMode: 'half', textAlign: 'justify',
+        dividesByWords: false, kinsoku: false, allowsTateChuYoko: false, latinScale: 1.12,
+      }, 320, 370);
+      let text = '';
+      while (text.length < engine.index.text.length) {
+        const page = engine.pageAtPosition(text.length);
+        expect(page.globalEnd).toBeGreaterThan(page.globalStart);
+        expect(page.context.runs.every((run) => Object.values(run.frame).every(Number.isFinite))).toBe(true);
+        expect(page.context.runs.every((run) => run.visibility === 'visible')).toBe(true);
+        text += page.text;
+      }
+      expect(text).toBe(engine.index.text);
+    }
+  });
+
+  it('applies word wrapping and the vertical number toggle to actual glyph placement', () => {
+    if (direction === 'tbRl') {
+      const book = fixture([{ text: '12月' }]);
+      const rotations = [false, true].map((allowsTateChuYoko) => new PaginationEngine(book, {
+        ...defaultSettings, direction, allowsTateChuYoko,
+      }, 320, 370).pageAtPosition(0).glyphs.find((glyph) => glyph.text === '1')!.rotate);
+      expect(rotations).toEqual([90, 0]);
+    } else {
+      const book = fixture([{ text: '日本語 typography' }]);
+      const wordLines = [false, true].map((dividesByWords) => new PaginationEngine(book, {
+        ...defaultSettings, direction, dividesByWords,
+      }, 156, 370).pageAtPosition(0).context.runs.filter((run) => /[a-z]/u.test(run.char)).map((run) => run.line));
+      expect(new Set(wordLines[0]).size).toBeGreaterThan(1);
+      expect(new Set(wordLines[1]).size).toBe(1);
+    }
+  });
+
   it('joins all page ranges exactly, preserving spaces, blank lines, supplementary glyphs, marks and ruby', () => {
     const sentence = '　「雨。」一寸待て。12月には、𠮷野のか\u3099き\u{E0100}を食べる……。\n\n';
     const text = sentence.repeat(90);

@@ -41,6 +41,8 @@ import {
   type ReaderSettings,
   type ReadingRecord,
   defaultSettings,
+  japaneseFontOptions,
+  latinFontOptions,
 } from "./types";
 
 const assetUrl = (path: string) =>
@@ -92,16 +94,14 @@ function Brand({ compact = false }: { compact?: boolean }) {
     <a
       className={`brand ${compact ? "compact" : ""}`}
       href="#/"
-      aria-label="Aozora Stone Reader 本棚へ"
+      aria-label="縦・横表示対応の青空文庫リーダー 本棚へ"
     >
       <span className="brand-mark" aria-hidden="true">
         <i />
         <i />
       </span>
       <span>
-        <strong>
-          青空<span className="brand-dot">・</span>石の文庫
-        </strong>
+        <strong>縦・横表示対応の青空文庫リーダー</strong>
         <small>AOZORA STONE READER</small>
       </span>
     </a>
@@ -358,6 +358,43 @@ function WorkInfo({
   );
 }
 
+function SettingRange({
+  id,
+  label,
+  value,
+  min,
+  max,
+  step,
+  display,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  display: string;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <div className="setting-group typography-range">
+      <label htmlFor={id}>{label}</label>
+      <output htmlFor={id}>{display}</output>
+      <input
+        id={id}
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        aria-valuetext={display}
+        onChange={(event) => onChange(Number(event.target.value))}
+      />
+    </div>
+  );
+}
+
 function SettingsPanel({
   settings,
   onChange,
@@ -371,72 +408,158 @@ function SettingsPanel({
   ) => onChange({ ...settings, [key]: value });
   return (
     <div className="settings-content">
-      <div className="setting-group">
-        <label>文字の組み方向</label>
-        <div className="segmented">
-          <button
-            aria-pressed={settings.direction === "tbRl"}
-            onClick={() => set("direction", "tbRl")}
+      <div className="typography-row">
+        <div className="setting-group">
+          <label htmlFor="writing-direction">文字方向</label>
+          <select
+            id="writing-direction"
+            value={settings.direction}
+            onChange={(event) =>
+              set(
+                "direction",
+                event.target.value as ReaderSettings["direction"],
+              )
+            }
           >
-            縦書き
-          </button>
-          <button
-            aria-pressed={settings.direction === "lrTb"}
-            onClick={() => set("direction", "lrTb")}
+            <option value="lrTb">横書き (lrTb)</option>
+            <option value="tbRl">縦書き (tbRl)</option>
+          </select>
+        </div>
+        <div className="setting-group">
+          <label htmlFor="punctuation-mode">約物</label>
+          <select
+            id="punctuation-mode"
+            value={settings.punctuationMode}
+            onChange={(event) =>
+              set(
+                "punctuationMode",
+                event.target.value as ReaderSettings["punctuationMode"],
+              )
+            }
           >
-            横書き
-          </button>
+            <option value="stone">stone</option>
+            <option value="whole">常に全角</option>
+            <option value="half">常に半角</option>
+          </select>
         </div>
       </div>
-      <div className="setting-group">
-        <label htmlFor="font-size">
-          文字の大きさ <span>{settings.fontSize}px</span>
-        </label>
-        <div className="range-row">
-          <span className="serif">あ</span>
-          <input
-            id="font-size"
-            type="range"
-            min="16"
-            max="36"
-            step="2"
-            value={settings.fontSize}
-            onChange={(e) => set("fontSize", Number(e.target.value))}
-          />
-          <span className="serif large-type">あ</span>
+      <div className="typography-row">
+        <div className="setting-group">
+          <label htmlFor="text-align">文字寄せ</label>
+          <select
+            id="text-align"
+            value={settings.textAlign}
+            onChange={(event) =>
+              set(
+                "textAlign",
+                event.target.value as ReaderSettings["textAlign"],
+              )
+            }
+          >
+            <option value="leading">行頭</option>
+            <option value="center">中央</option>
+            <option value="trailing">行末</option>
+            <option value="justify">均等</option>
+          </select>
+        </div>
+        <div className="setting-group">
+          <label htmlFor="direction-align">行の寄せ</label>
+          <select
+            id="direction-align"
+            value={settings.directionAlign}
+            onChange={(event) =>
+              set(
+                "directionAlign",
+                event.target.value as ReaderSettings["directionAlign"],
+              )
+            }
+          >
+            <option value="start">start</option>
+            <option value="middle">middle</option>
+            <option value="end">end</option>
+          </select>
         </div>
       </div>
+      <SettingRange
+        id="font-size"
+        label="フォントサイズ"
+        min={10}
+        max={48}
+        step={1}
+        value={settings.fontSize}
+        display={`${settings.fontSize}px`}
+        onChange={(value) => set("fontSize", value)}
+      />
+      <SettingRange
+        id="line-height"
+        label="行送り"
+        min={1}
+        max={3}
+        step={0.05}
+        value={settings.lineHeight}
+        display={`×${settings.lineHeight.toFixed(2)}`}
+        onChange={(value) => set("lineHeight", value)}
+      />
       <div className="setting-group">
-        <label>書体</label>
-        <div className="segmented">
-          <button
-            aria-pressed={settings.font === "serif"}
-            onClick={() => set("font", "serif")}
-            className="serif"
-          >
-            明朝体
-          </button>
-          <button
-            aria-pressed={settings.font === "sans"}
-            onClick={() => set("font", "sans")}
-          >
-            ゴシック体
-          </button>
-        </div>
-      </div>
-      <div className="setting-group">
-        <label>行間</label>
-        <div className="segmented">
-          {[1.9, 2.2, 2.5].map((n, i) => (
-            <button
-              key={n}
-              aria-pressed={settings.lineHeight === n}
-              onClick={() => set("lineHeight", n)}
-            >
-              {["標準", "ゆったり", "広く"][i]}
-            </button>
+        <label htmlFor="japanese-font">和文フォント</label>
+        <select
+          id="japanese-font"
+          value={settings.font}
+          onChange={(event) =>
+            set("font", event.target.value as ReaderSettings["font"])
+          }
+        >
+          {japaneseFontOptions.map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
           ))}
-        </div>
+        </select>
+      </div>
+      <div className="setting-group">
+        <label htmlFor="latin-font">欧文フォント</label>
+        <select
+          id="latin-font"
+          value={settings.latinFont}
+          onChange={(event) =>
+            set("latinFont", event.target.value as ReaderSettings["latinFont"])
+          }
+        >
+          {latinFontOptions.map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </div>
+      <SettingRange
+        id="latin-scale"
+        label="欧文スケール"
+        min={0.6}
+        max={1.2}
+        step={0.01}
+        value={settings.latinScale}
+        display={`×${settings.latinScale.toFixed(2)}`}
+        onChange={(value) => set("latinScale", value)}
+      />
+      <div className="typography-checks">
+        {(
+          [
+            ["kinsoku", "禁則処理"],
+            ["dividesByWords", "単語で改行（単語を分割しない）"],
+            ["allowsTateChuYoko", "縦中横"],
+            ["showFrames", "文字の枠を表示"],
+          ] as const
+        ).map(([key, label]) => (
+          <label key={key}>
+            <input
+              type="checkbox"
+              checked={settings[key]}
+              onChange={(event) => set(key, event.target.checked)}
+            />
+            {label}
+          </label>
+        ))}
       </div>
       <div className="setting-group">
         <label>配色</label>
@@ -713,16 +836,12 @@ export default function App() {
         )
       ) : (
         <main id="main-content" tabIndex={-1} className="library-main">
+          <h1 className="sr-only">縦・横表示対応の青空文庫リーダー</h1>
           <section className="hero">
             <div className="hero-copy">
               <span className="eyebrow">
                 <span /> A LITTLE LIBRARY, A QUIET MOMENT
               </span>
-              <h1 className="serif">
-                一冊と、
-                <br />
-                静かな時間を。
-              </h1>
               <p>
                 青空文庫の名作を、心地よい文字組みで。
                 <br />
@@ -824,7 +943,6 @@ export default function App() {
                   本棚<span>{catalog.length}冊</span>
                 </h2>
               </div>
-              <p>何度でも読みたい、言葉があります。</p>
             </div>
             <div className="collection-tools">
               <div className="filter-tabs" aria-label="作品の絞り込み">
@@ -1372,7 +1490,11 @@ function ReadingView({
         <div className="reader-running-head">
           <span>
             {vertical ? "縦書き" : "横書き"} /{" "}
-            {settings.font === "serif" ? "明朝体" : "ゴシック体"}
+            {
+              japaneseFontOptions.find(
+                ([value]) => value === settings.font,
+              )?.[1]
+            }
           </span>
           <span>AOZORA COLLECTION {String(index + 1).padStart(2, "0")}</span>
         </div>

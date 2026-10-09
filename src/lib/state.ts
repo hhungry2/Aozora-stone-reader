@@ -1,4 +1,4 @@
-import { defaultSettings } from '../types';
+import { defaultSettings, fontFamilies, latinFontFamilies } from '../types';
 import type { Anchor, Bookmark, ReaderSettings, ReadingRecord } from '../types';
 
 export const APP_STORAGE_PREFIX = 'aozora-stone-reader:';
@@ -87,18 +87,31 @@ export function createReaderStorage(storage: StorageLike | null = browserStorage
     if (value === null) return result;
     if (!isObject(value)) { status.corrupted = true; return result; }
     // Upgrade the former tight spacing without discarding the reader's other settings.
-    const lineHeight = value.lineHeight === 1.6 ? 1.9 : value.lineHeight;
+    const lineHeight = value.settingsVersion !== 2 && value.lineHeight === 1.6 ? 1.9 : value.lineHeight;
+    const inSteps = (input: unknown, min: number, max: number, step: number) =>
+      typeof input === 'number' && Number.isFinite(input) && input >= min && input <= max &&
+      Math.abs((input - min) / step - Math.round((input - min) / step)) < 0.00001;
     const valid: Record<keyof ReaderSettings, boolean> = {
       direction: value.direction === 'tbRl' || value.direction === 'lrTb',
-      fontSize: typeof value.fontSize === 'number' && value.fontSize >= 16 && value.fontSize <= 36 && value.fontSize % 2 === 0,
-      lineHeight: lineHeight === 1.9 || lineHeight === 2.2 || lineHeight === 2.5,
-      font: value.font === 'serif' || value.font === 'sans',
+      fontSize: inSteps(value.fontSize, 10, 48, 1),
+      lineHeight: inSteps(lineHeight, 1, 3, 0.05),
+      font: typeof value.font === 'string' && Object.hasOwn(fontFamilies, value.font),
+      latinFont: typeof value.latinFont === 'string' && Object.hasOwn(latinFontFamilies, value.latinFont),
+      latinScale: inSteps(value.latinScale, 0.6, 1.2, 0.01),
+      punctuationMode: ['stone', 'whole', 'half'].includes(value.punctuationMode as string),
+      textAlign: ['leading', 'center', 'trailing', 'justify'].includes(value.textAlign as string),
+      directionAlign: ['start', 'middle', 'end'].includes(value.directionAlign as string),
+      kinsoku: typeof value.kinsoku === 'boolean',
+      dividesByWords: typeof value.dividesByWords === 'boolean',
+      allowsTateChuYoko: typeof value.allowsTateChuYoko === 'boolean',
+      showFrames: typeof value.showFrames === 'boolean',
       theme: value.theme === 'paper' || value.theme === 'light' || value.theme === 'dark',
       ruby: typeof value.ruby === 'boolean',
     };
     for (const key of Object.keys(valid) as (keyof ReaderSettings)[]) {
       if (valid[key]) Object.assign(result, { [key]: key === 'lineHeight' ? lineHeight : value[key] });
-      else status.corrupted = true;
+      // Earlier releases did not save these additional typography preferences.
+      else if (Object.hasOwn(value, key) || ['direction', 'fontSize', 'lineHeight', 'font', 'theme', 'ruby'].includes(key)) status.corrupted = true;
     }
     return result;
   }
@@ -128,7 +141,7 @@ export function createReaderStorage(storage: StorageLike | null = browserStorage
 
   return {
     getSettings: (): ReaderSettings => settingsFrom(read(SETTINGS_KEY)),
-    saveSettings: (settings: ReaderSettings): boolean => write(SETTINGS_KEY, settingsFrom(settings)),
+    saveSettings: (settings: ReaderSettings): boolean => write(SETTINGS_KEY, { ...settingsFrom({ ...settings, settingsVersion: 2 }), settingsVersion: 2 }),
     getRecord,
     saveRecord(bookId: string, record: ReadingRecord): boolean {
       const validated = recordFrom(record);

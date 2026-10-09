@@ -2,6 +2,7 @@ import { FixedMeasurer, getSharedCanvasMeasurer } from '@non-standardworld/stone
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Anchor, Book, ReaderSettings } from '../types';
 import { PaginationEngine, type ReaderPageData } from './engine';
+import { loadReaderFont } from './fonts';
 
 interface Options { book: Book; settings: ReaderSettings; width: number; height: number; anchor: Anchor | null }
 interface Result {
@@ -20,6 +21,18 @@ export function usePagination({ book, settings, width, height, anchor }: Options
   const [retryRevision, setRetryRevision] = useState(0);
   const retry = useCallback(() => setRetryRevision((revision) => revision + 1), []);
   useEffect(() => {
+    if (settings.font === 'serif' || settings.font === 'sans') return;
+    let active = true;
+    const sample = book.blocks.slice(0, 12).map((block) => block.text).join('').slice(0, 500);
+    void loadReaderFont(settings.font, sample).then(() => {
+      if (active) {
+        getSharedCanvasMeasurer()?.invalidate();
+        setFontRevision((revision) => revision + 1);
+      }
+    });
+    return () => { active = false; };
+  }, [book, settings.font]);
+  useEffect(() => {
     let active = true;
     const update = () => {
       if (!active) return;
@@ -31,7 +44,9 @@ export function usePagination({ book, settings, width, height, anchor }: Options
     return () => { active = false; document.fonts?.removeEventListener('loadingdone', update); };
   }, []);
   const engine = useMemo(() => new PaginationEngine(book, settings, width, height, getSharedCanvasMeasurer() ?? new FixedMeasurer()),
-    [book, settings.direction, settings.fontSize, settings.lineHeight, settings.font, settings.ruby, width, height, fontRevision]);
+    [book, settings.direction, settings.fontSize, settings.lineHeight, settings.font, settings.latinFont,
+      settings.latinScale, settings.punctuationMode, settings.textAlign, settings.directionAlign,
+      settings.kinsoku, settings.dividesByWords, settings.allowsTateChuYoko, settings.ruby, width, height, fontRevision]);
   const [state, setState] = useState<{ engine: PaginationEngine | null; anchorKey: string; retryRevision: number; page: ReaderPageData | null; previousAnchor: Anchor | null; error: string | null }>({
     engine: null, anchorKey: '', retryRevision: -1, page: null, previousAnchor: null, error: null,
   });

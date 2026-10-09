@@ -137,7 +137,7 @@ test("catalog, vertical/horizontal reading, position restoration, bookmarks and 
   await expect(rendered).toHaveAttribute("data-block", savedBlock!);
   await expect(rendered).toHaveAttribute("data-offset", savedOffset!);
   await page.getByRole("button", { name: "読書設定を開く" }).click();
-  await page.getByLabel("文字の大きさ").fill("28");
+  await page.getByLabel("フォントサイズ").fill("28");
   await page.getByRole("button", { name: "暗色", exact: true }).click();
   await page.getByRole("button", { name: "閉じる", exact: true }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");

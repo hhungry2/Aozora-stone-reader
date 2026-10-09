@@ -23,6 +23,36 @@ const record = (date = '2026-10-09T10:00:00.000Z'): ReadingRecord => ({
 });
 
 describe('reader state persistence', () => {
+  it('adds typography defaults to an earlier six-field settings record', () => {
+    const disk = new MemoryStorage();
+    disk.setItem(`${STORAGE_PREFIX}settings`, JSON.stringify({ direction: 'lrTb', fontSize: 28, lineHeight: 2.2, font: 'sans', theme: 'dark', ruby: false }));
+    const state = createReaderStorage(disk);
+    expect(state.getSettings()).toEqual({ ...defaultSettings, direction: 'lrTb', fontSize: 28, lineHeight: 2.2, font: 'sans', theme: 'dark', ruby: false });
+    expect(state.getStatus().corrupted).toBe(false);
+  });
+
+  it('persists all typography controls, including modern 1.6 spacing without legacy migration', () => {
+    const disk = new MemoryStorage();
+    const settings = { ...defaultSettings, fontSize: 47, lineHeight: 1.6, font: 'noto-sans' as const,
+      latinFont: 'georgia' as const, latinScale: 0.83, punctuationMode: 'whole' as const,
+      textAlign: 'justify' as const, directionAlign: 'end' as const,
+      kinsoku: false, dividesByWords: false, allowsTateChuYoko: false, showFrames: true };
+    expect(createReaderStorage(disk).saveSettings(settings)).toBe(true);
+    const reopened = createReaderStorage(disk);
+    expect(reopened.getSettings()).toEqual(settings);
+    expect(reopened.getStatus().corrupted).toBe(false);
+  });
+
+  it('rejects invalid new typography fields independently of valid saved preferences', () => {
+    const disk = new MemoryStorage();
+    disk.setItem(`${STORAGE_PREFIX}settings`, JSON.stringify({ ...defaultSettings, theme: 'dark', font: '__proto__',
+      latinFont: 'unknown', latinScale: 99, textAlign: 'unknown', directionAlign: 'unknown',
+      punctuationMode: 'unknown', showFrames: 'yes' }));
+    const state = createReaderStorage(disk);
+    expect(state.getSettings()).toEqual({ ...defaultSettings, theme: 'dark' });
+    expect(state.getStatus().corrupted).toBe(true);
+  });
+
   it('restores settings, text anchors and bookmarks after a new session', () => {
     const disk = new MemoryStorage();
     const first = createReaderStorage(disk);
@@ -56,7 +86,7 @@ describe('reader state persistence', () => {
     expect(migrated).toEqual({ ...legacy, lineHeight: 1.9 });
     expect(state.getStatus().corrupted).toBe(false);
     expect(state.saveSettings(migrated)).toBe(true);
-    expect(JSON.parse(disk.getItem(`${STORAGE_PREFIX}settings`)!)).toEqual(migrated);
+    expect(JSON.parse(disk.getItem(`${STORAGE_PREFIX}settings`)!)).toEqual({ ...migrated, settingsVersion: 2 });
     expect(createReaderStorage(disk).getSettings()).toEqual(migrated);
   });
 
