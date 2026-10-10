@@ -1,4 +1,4 @@
-import { handleStoneCopy, type GlyphElement } from '@non-standardworld/stone-engine.js';
+import { handleStoneCopy, runRangeOfSelection, textOfRunRange, type GlyphElement } from '@non-standardworld/stone-engine.js';
 import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import { fontFamilies, type ReaderSettings } from '../types';
 import type { ReaderPageData } from './engine';
@@ -66,7 +66,8 @@ export function ReaderPage({ page, settings, className }: { page: ReaderPageData
       }
     };
   }, [page, settings.direction, settings.fontSize, settings.lineHeight, settings.font, settings.ruby]);
-  return <div ref={root} className={className} style={{ width: page.width, height: page.height, position: 'relative', maxWidth: '100%' }}
+  return <div ref={root} className={className} data-testid="reader-leaf" data-start={page.globalStart} data-end={page.globalEnd}
+    style={{ width: page.width, height: page.height, position: 'relative', maxWidth: '100%' }}
     onCopy={(event) => {
       const image = svg.current;
       const container = root.current;
@@ -102,5 +103,39 @@ export function ReaderPage({ page, settings, className }: { page: ReaderPageData
       </g>
     </svg>
     <AccessibleText page={page} settings={settings} />
+  </div>;
+}
+
+export function ReaderPages({ pages, settings, spread }: { pages: ReaderPageData[]; settings: ReaderSettings; spread: boolean }) {
+  const root = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const container = root.current;
+    return () => {
+      const selection = container?.ownerDocument.getSelection();
+      if (container && selection?.anchorNode && selection.focusNode
+        && container.contains(selection.anchorNode) && container.contains(selection.focusNode)) selection.removeAllRanges();
+    };
+  }, [pages]);
+  return <div ref={root} className={`reader-pages${spread ? ' spread' : ''}`} onCopy={(event) => {
+    if (event.defaultPrevented || pages.length < 2 || !event.clipboardData) return;
+    const container = event.currentTarget;
+    const selection = container.ownerDocument.getSelection();
+    if (!selection || selection.rangeCount !== 1 || selection.isCollapsed) return;
+    const range = selection.getRangeAt(0);
+    if (!container.contains(range.startContainer) || !container.contains(range.endContainer)) return;
+    const fragments = [...container.querySelectorAll('svg')].map((svg, index) => {
+      const fullStart = range.comparePoint(svg, 0) === 0;
+      const fullEnd = range.comparePoint(svg, svg.childNodes.length) === 0;
+      if (fullStart && fullEnd) return pages[index].text;
+      const runs = runRangeOfSelection(svg, range);
+      return runs ? textOfRunRange(pages[index].context, fullStart ? 0 : runs[0], fullEnd ? pages[index].context.runs.length : runs[1]) : '';
+    });
+    if (fragments.some(Boolean)) {
+      event.clipboardData.setData('text/plain', fragments.join(''));
+      event.preventDefault();
+    }
+  }}>
+    {pages.map((page, index) => <ReaderPage key={index} page={page} settings={settings} className="reader-leaf" />)}
+    {spread && pages.length === 1 && <div className="reader-leaf reader-blank-page" aria-hidden="true" style={{ width: pages[0].width, height: pages[0].height }} />}
   </div>;
 }

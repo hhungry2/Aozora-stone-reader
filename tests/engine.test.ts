@@ -15,6 +15,33 @@ function fixture(blocks: Partial<TextBlock>[]): Book {
 }
 
 for (const direction of ['tbRl', 'lrTb'] as const) describe(`Stone pagination ${direction}`, () => {
+  it('turns consecutive two-page spreads without dropping or repeating source text', () => {
+    const book = fixture([{ text: '　「見開き。」日本語 12月。\n'.repeat(60) }]);
+    const engine = new PaginationEngine(book, { ...defaultSettings, direction }, 320, 370);
+    let anchor = null as ReturnType<typeof anchorAt> | null;
+    let text = '';
+    let turns = 0;
+    while (text.length < engine.index.text.length) {
+      const pages = engine.pagesAt(anchor, 2);
+      expect(pages[0].globalStart).toBe(text.length);
+      if (pages.length === 2) expect(pages[1].globalStart).toBe(pages[0].globalEnd);
+      const last = pages[pages.length - 1];
+      const previousStart = text.length;
+      text += pages.map(page => page.text).join('');
+      if (last.globalEnd < engine.index.text.length) {
+        const next = engine.pagesAt(last.end, 2);
+        expect(positionOf(engine.index, engine.previousAnchor(next[0], 2))).toBe(previousStart);
+      }
+      anchor = last.end;
+      turns += 1;
+    }
+    expect(turns).toBeGreaterThan(2);
+    expect(text).toBe(engine.index.text);
+    const final = engine.pagesAt(anchorAt(engine.index, engine.index.text.length - 1), 2);
+    expect(final).toHaveLength(1);
+    expect(final[0].globalEnd).toBe(engine.index.text.length);
+  });
+
   it('changes punctuation cell widths and keeps kinsoku optional', () => {
     const book = fixture([{ text: '「日本語」。' }]);
     const whole = new PaginationEngine(book, { ...defaultSettings, direction, punctuationMode: 'whole' }, 320, 370).pageAtPosition(0);

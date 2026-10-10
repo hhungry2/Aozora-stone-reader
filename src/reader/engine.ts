@@ -247,6 +247,13 @@ export class PaginationEngine {
     return this.pageAtPosition(positionOf(this.index, anchor));
   }
 
+  pagesAt(anchor: Anchor | null, count: 1 | 2 = 1): ReaderPageData[] {
+    const first = this.pageAt(anchor);
+    return count === 2 && first.globalEnd < this.index.text.length
+      ? [first, this.pageAt(first.end)]
+      : [first];
+  }
+
   pageAtPosition(requested: number, stopAt?: number): ReaderPageData {
     const start = safeStart(this.index, requested);
     const cached = this.cache.get(start);
@@ -398,7 +405,11 @@ export class PaginationEngine {
     }
   }
 
-  previousAnchor(page: ReaderPageData): Anchor | null {
+  previousAnchor(page: ReaderPageData, count: 1 | 2 = 1): Anchor | null {
+    if (count === 2) {
+      const previous = this.previousAnchor(page);
+      return previous ? this.previousAnchor(this.pageAt(previous)) ?? previous : null;
+    }
     if (page.globalStart <= 0) return null;
     const known = this.predecessors.get(page.globalStart);
     if (known !== undefined) return anchorAt(this.index, known);

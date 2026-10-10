@@ -33,7 +33,7 @@ import {
 import { anchorProgress, createAnchor, restoreAnchor } from "./lib/anchors";
 import { filterCatalog } from "./lib/catalog";
 import { readerStorage } from "./lib/state";
-import { ReaderPage, usePagination } from "./reader";
+import { ReaderPages, usePagination } from "./reader";
 import {
   type Anchor,
   type Book,
@@ -408,6 +408,22 @@ function SettingsPanel({
   ) => onChange({ ...settings, [key]: value });
   return (
     <div className="settings-content">
+      <div className="setting-group">
+        <label htmlFor="page-layout">ページ表示</label>
+        <select
+          id="page-layout"
+          value={settings.pageLayout}
+          onChange={(event) =>
+            set(
+              "pageLayout",
+              event.target.value as ReaderSettings["pageLayout"],
+            )
+          }
+        >
+          <option value="single">1ページ</option>
+          <option value="spread">見開き（横長の画面で2ページ）</option>
+        </select>
+      </div>
       <div className="typography-row">
         <div className="setting-group">
           <label htmlFor="writing-direction">文字方向</label>
@@ -1182,6 +1198,15 @@ function ReadingView({
   const [panel, setPanel] = useState<"toc" | "bookmarks" | "info" | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [size, setSize] = useState({ width: 0, height: 0 });
+  const [landscape, setLandscape] = useState(
+    () =>
+      window.matchMedia("(min-width: 800px) and (orientation: landscape)")
+        .matches,
+  );
+  const spread =
+    settings.pageLayout === "spread" && landscape && size.width >= 600;
+  const pageCount = spread ? 2 : 1;
+  const pageWidth = spread ? Math.floor((size.width - 24) / 2) : size.width;
   const viewport = useRef<HTMLDivElement>(null);
   const pointer = useRef<{ x: number; y: number } | null>(null);
   const wheel = useRef({ distance: 0, lastEventAt: 0, lastTurnAt: -Infinity });
@@ -1189,6 +1214,7 @@ function ReadingView({
   const migratedBookmarks = useRef(false);
   const {
     page,
+    pages,
     loading,
     error,
     nextAnchor,
@@ -1199,13 +1225,23 @@ function ReadingView({
   } = usePagination({
     book,
     settings,
-    width: size.width,
+    width: pageWidth,
     height: size.height,
     anchor,
+    pageCount,
   });
   const record = readerStorage.getRecord(book.id);
   const bookmarks = record?.bookmarks || [];
   const vertical = settings.direction === "tbRl";
+  useEffect(() => {
+    const query = window.matchMedia(
+      "(min-width: 800px) and (orientation: landscape)",
+    );
+    const update = () => setLandscape(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
   useEffect(() => {
     if (restart) onRestartConsumed();
   }, [restart, onRestartConsumed]);
@@ -1460,6 +1496,26 @@ function ReadingView({
           <span>{book.authorLabel}</span>
         </div>
         <div className="reader-header-actions">
+          <div
+            className="direction-toggle page-layout-toggle"
+            role="group"
+            aria-label="ページ表示"
+          >
+            <button
+              aria-label="1ページ表示に切り替え"
+              aria-pressed={settings.pageLayout === "single"}
+              onClick={() => onSettings({ ...settings, pageLayout: "single" })}
+            >
+              1ページ
+            </button>
+            <button
+              aria-label="見開き表示に切り替え"
+              aria-pressed={settings.pageLayout === "spread"}
+              onClick={() => onSettings({ ...settings, pageLayout: "spread" })}
+            >
+              見開き
+            </button>
+          </div>
           <div className="direction-toggle">
             <button
               aria-label="縦書きに切り替え"
@@ -1528,9 +1584,14 @@ function ReadingView({
                 data-block={page.start.blockId}
                 data-offset={page.start.offset}
                 data-start={page.globalStart}
-                data-end={page.globalEnd}
+                data-end={pages[pages.length - 1].globalEnd}
+                data-layout={spread ? "spread" : "single"}
               >
-                <ReaderPage page={page} settings={settings} />
+                <ReaderPages
+                  pages={pages}
+                  settings={settings}
+                  spread={spread}
+                />
               </div>
             )}
             {loading && (

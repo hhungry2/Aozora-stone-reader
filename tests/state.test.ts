@@ -35,6 +35,7 @@ describe('reader state persistence', () => {
     const disk = new MemoryStorage();
     const settings = { ...defaultSettings, fontSize: 47, lineHeight: 1.6, font: 'noto-sans' as const,
       latinFont: 'georgia' as const, latinScale: 0.83, punctuationMode: 'whole' as const,
+      pageLayout: 'spread' as const,
       textAlign: 'justify' as const, directionAlign: 'end' as const,
       kinsoku: false, dividesByWords: false, allowsTateChuYoko: false, showFrames: true };
     expect(createReaderStorage(disk).saveSettings(settings)).toBe(true);
@@ -47,7 +48,7 @@ describe('reader state persistence', () => {
     const disk = new MemoryStorage();
     disk.setItem(`${STORAGE_PREFIX}settings`, JSON.stringify({ ...defaultSettings, theme: 'dark', font: '__proto__',
       latinFont: 'unknown', latinScale: 99, textAlign: 'unknown', directionAlign: 'unknown',
-      punctuationMode: 'unknown', showFrames: 'yes' }));
+      punctuationMode: 'unknown', showFrames: 'yes', pageLayout: 'invalid' }));
     const state = createReaderStorage(disk);
     expect(state.getSettings()).toEqual({ ...defaultSettings, theme: 'dark' });
     expect(state.getStatus().corrupted).toBe(true);

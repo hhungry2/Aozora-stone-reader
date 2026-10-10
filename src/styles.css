@@ -1434,6 +1434,18 @@ button {
   background: var(--green);
   color: var(--bg);
 }
+.page-layout-toggle button {
+  width: auto;
+  padding: 0 10px;
+  font-family: inherit;
+  font-size: 11px;
+  white-space: nowrap;
+}
+@media (max-width: 799px), (orientation: portrait) {
+  .page-layout-toggle {
+    display: none;
+  }
+}
 .reader-main {
   width: 100%;
   margin: 0;
@@ -1582,6 +1594,32 @@ button {
 .reader-page-wrap svg {
   color: var(--text);
   fill: currentColor;
+}
+.reader-pages {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+.reader-pages.spread {
+  gap: 24px;
+  justify-content: center;
+}
+.vertical .reader-pages.spread {
+  flex-direction: row-reverse;
+}
+.reader-pages.spread::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--line);
+  pointer-events: none;
+}
+.reader-leaf {
+  flex-shrink: 0;
 }
 .reader-page-bottom {
   display: flex;
