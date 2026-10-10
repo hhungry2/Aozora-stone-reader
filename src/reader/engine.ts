@@ -257,10 +257,12 @@ export class PaginationEngine {
     const vertical = this.settings.direction === 'tbRl';
     const fontSize = this.settings.fontSize;
     const margin = 8;
+    // SVG punctuation can extend before its inline frame at the start of a line.
+    const leadingMargin = Math.max(margin, fontSize * 0.7);
     // Reserve a lane even with ruby hidden, so the toggle does not change pagination.
     const annotationLane = fontSize * 0.92;
-    const bodyWidth = Math.max(fontSize * 2, this.width - margin * 2 - (vertical ? annotationLane : 0));
-    const bodyHeight = Math.max(fontSize * 2, this.height - margin * 2 - (vertical ? 0 : annotationLane));
+    const bodyWidth = Math.max(fontSize * 2, this.width - margin - (vertical ? margin + annotationLane : leadingMargin));
+    const bodyHeight = Math.max(fontSize * 2, this.height - margin - (vertical ? leadingMargin : margin + annotationLane));
     const imageRange = this.index.ranges.find((range) => range.block.kind === 'image' && range.block.image && range.end > start);
     const imagePage = imageRange?.start === start;
     const imageLimit = imageRange
@@ -314,8 +316,8 @@ export class PaginationEngine {
     const page: ReaderPageData = {
       start: anchorAt(this.index, start), end: anchorAt(this.index, pageEnd),
       globalStart: start, globalEnd: pageEnd, text: this.index.text.slice(start, pageEnd),
-      width: this.width, height: this.height, insetX: margin,
-      insetY: margin + (vertical ? 0 : annotationLane), context,
+      width: this.width, height: this.height, insetX: vertical ? margin : leadingMargin,
+      insetY: vertical ? leadingMargin : margin + annotationLane, context,
       glyphs: glyphParagraphs(context).flatMap((paragraph) => paragraph.groups.flatMap((group) => group.glyphs))
         .filter((glyph) => glyph.text !== '\ufffc'),
       rubies: [], emphasis: [], images: [],

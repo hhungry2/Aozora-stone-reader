@@ -1363,6 +1363,7 @@ button {
   min-height: 25px;
 }
 .reader-shell {
+  --reader-gutter: clamp(12px, 1.2vw, 20px);
   height: 100dvh;
   min-height: 400px;
   display: flex;
@@ -1371,9 +1372,9 @@ button {
   background: var(--bg);
 }
 .reader-header {
-  height: 76px;
+  height: 56px;
   flex-shrink: 0;
-  padding: 0 40px;
+  padding: 0 var(--reader-gutter);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1434,15 +1435,14 @@ button {
   color: var(--bg);
 }
 .reader-main {
-  width: min(1090px, 100%);
-  max-width: 1090px;
-  margin: 0 auto;
+  width: 100%;
+  margin: 0;
   flex: 1;
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 0 50px;
+  padding: 0 var(--reader-gutter);
   outline: 0;
 }
 .reader-workspace {
@@ -1547,7 +1547,7 @@ button {
   font-size: 12px;
 }
 .reader-running-head {
-  padding: 24px 0 22px;
+  padding: 8px 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1588,7 +1588,7 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  padding: 20px 0 24px;
+  padding: 6px 0;
   font-size: 9px;
   color: var(--muted);
   flex-shrink: 0;
@@ -1603,7 +1603,8 @@ button {
   padding: 0 6px;
 }
 .reader-toolbar {
-  height: 88px;
+  height: calc(60px + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
   flex-shrink: 0;
   border-top: 1px solid var(--line);
   position: relative;
@@ -1623,13 +1624,13 @@ button {
   transition: width 0.2s;
 }
 .toolbar-inner {
-  width: min(1190px, 100%);
+  width: 100%;
   height: 100%;
-  margin: auto;
+  margin: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 40px;
+  padding: 0 var(--reader-gutter);
 }
 .toolbar-tools {
   display: flex;
@@ -1783,17 +1784,11 @@ button {
   .bookmark-add {
     min-width: 190px;
   }
-  .toolbar-inner {
-    padding: 0 25px;
-  }
   .page-controls {
     gap: 13px;
   }
   .page-nav {
     min-width: 85px;
-  }
-  .reader-main {
-    padding: 0 40px;
   }
 }
 @media (max-width: 800px) {
@@ -1960,11 +1955,7 @@ button {
     display: none;
   }
   .reader-header {
-    height: 66px;
-    padding: 0 23px;
-  }
-  .reader-main {
-    padding: 0 30px;
+    height: 52px;
   }
   .reader-title {
     flex-direction: column;
@@ -1980,10 +1971,10 @@ button {
     gap: 7px;
   }
   .reader-running-head {
-    padding: 14px 0;
+    padding: 6px 0;
   }
   .reader-page-bottom {
-    padding: 12px 0;
+    padding: 6px 0;
   }
   .toolbar-tools,
   .bookmark-add {
@@ -2008,11 +1999,8 @@ button {
     padding: 8px 10px;
     gap: 6px;
   }
-  .toolbar-inner {
-    padding: 0 25px;
-  }
   .reader-toolbar {
-    height: 81px;
+    height: calc(64px + env(safe-area-inset-bottom));
   }
 }
 @media (max-width: 560px) {
@@ -2345,8 +2333,6 @@ button {
     font-size: 10px;
   }
   .reader-header {
-    height: 62px;
-    padding: 0 14px;
     gap: 12px;
   }
   .reader-back {
@@ -2384,12 +2370,9 @@ button {
   .desktop-info {
     display: none;
   }
-  .reader-main {
-    padding: 0 20px;
-  }
   .reader-running-head {
     font-size: 8px;
-    padding: 14px 0;
+    padding: 6px 0;
   }
   .reader-running-head > span:last-child {
     font-size: 6px;
@@ -2397,7 +2380,7 @@ button {
   }
   .reader-page-bottom {
     font-size: 8px;
-    padding: 12px 0;
+    padding: 6px 0;
   }
   .reader-end {
     gap: 5px;
@@ -2405,12 +2388,7 @@ button {
   .reader-end .text-link {
     font-size: 8px;
   }
-  .reader-toolbar {
-    height: 80px;
-    padding-bottom: env(safe-area-inset-bottom);
-  }
   .toolbar-inner {
-    padding: 0 15px;
     gap: 10px;
   }
   .toolbar-tools {
@@ -2479,7 +2457,6 @@ button {
     min-width: 99px;
   }
   .toolbar-inner {
-    padding: 0 12px;
     gap: 7px;
   }
   .page-nav {
@@ -2489,25 +2466,19 @@ button {
   .page-controls {
     gap: 5px;
   }
-  .reader-main {
-    padding: 0 16px;
-  }
 }
 @media (max-height: 550px) and (min-width: 560px) {
   .reader-header {
-    height: 50px;
+    height: 48px;
   }
   .reader-toolbar {
-    height: 60px;
+    height: calc(52px + env(safe-area-inset-bottom));
   }
   .reader-running-head {
-    padding: 12px 0;
+    padding: 4px 0;
   }
   .reader-page-bottom {
-    padding: 12px 0;
-  }
-  .reader-main {
-    max-width: 1200px;
+    padding: 4px 0;
   }
 }
 @media (prefers-reduced-motion: reduce) {

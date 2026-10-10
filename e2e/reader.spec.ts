@@ -187,45 +187,57 @@ test("long book, contents, missing route and denied storage remain usable", asyn
   await expect(page.locator(".book-card")).toHaveCount(20);
 });
 
-test("screen layout stays inside a narrow viewport and image assets load", async ({
+test("screen layout keeps body text and ruby inside narrow and wide viewports", async ({
   browser,
   baseURL,
 }) => {
-  const context = await browser.newContext({
-    baseURL,
-    viewport: { width: 320, height: 640 },
-  });
-  const page = await context.newPage();
-  await page.goto("/");
-  await expect(page.locator(".book-card")).toHaveCount(20);
-  expect(
-    await page.evaluate(() => document.documentElement.scrollWidth),
-  ).toBeLessThanOrEqual(320);
-  await page.goto("/#/read/000127");
-  await expect(page.getByTestId("reader-page").locator("svg")).toBeVisible();
-  const viewport = page.getByTestId("reader-viewport");
-  const rendered = page.getByTestId("reader-page");
-  const bounds = await viewport.boundingBox();
-  const glyphs = await rendered.locator("svg").evaluate((svg) => {
-    const root = svg.getBoundingClientRect();
-    return [...svg.querySelectorAll("tspan")]
-      .filter((el) => el.textContent?.trim())
-      .map((el) => {
-        const r = el.getBoundingClientRect();
-        return {
-          x: r.x - root.x,
-          y: r.y - root.y,
-          right: r.right - root.x,
-          bottom: r.bottom - root.y,
-        };
+  for (const size of [
+    { width: 320, height: 640 },
+    { width: 1920, height: 1080 },
+  ]) {
+    const context = await browser.newContext({
+      baseURL,
+      viewport: size,
+    });
+    const page = await context.newPage();
+    await page.goto("/");
+    await expect(page.locator(".book-card")).toHaveCount(20);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(size.width);
+    await page.goto("/#/read/000127");
+    await expect(page.getByTestId("reader-page").locator("svg")).toBeVisible();
+    const viewport = page.getByTestId("reader-viewport");
+    const rendered = page.getByTestId("reader-page");
+    for (const direction of ["tbRl", "lrTb"]) {
+      if (direction === "lrTb")
+        await page.getByRole("button", { name: "横書きに切り替え" }).click();
+      await expect(page.locator(".reader-loading")).toHaveCount(0);
+      const bounds = await viewport.boundingBox();
+      const glyphs = await rendered.locator("svg").evaluate((svg) => {
+        const root = svg.getBoundingClientRect();
+        return [...svg.querySelectorAll("tspan")]
+          .filter((el) => el.textContent?.trim())
+          .map((el) => {
+            const r = el.getBoundingClientRect();
+            return {
+              x: r.x - root.x,
+              y: r.y - root.y,
+              right: r.right - root.x,
+              bottom: r.bottom - root.y,
+            };
+          });
       });
-  });
-  expect(bounds).not.toBeNull();
-  for (const glyph of glyphs) {
-    expect(glyph.x).toBeGreaterThanOrEqual(-2);
-    expect(glyph.y).toBeGreaterThanOrEqual(-2);
-    expect(glyph.right).toBeLessThanOrEqual(bounds!.width + 2);
-    expect(glyph.bottom).toBeLessThanOrEqual(bounds!.height + 2);
+      expect(bounds).not.toBeNull();
+      const clipped = glyphs.filter(
+        (glyph) =>
+          glyph.x < -2 ||
+          glyph.y < -2 ||
+          glyph.right > bounds!.width + 2 ||
+          glyph.bottom > bounds!.height + 2,
+      );
+      expect(clipped).toEqual([]);
+    }
+    await context.close();
   }
-  await context.close();
 });
