@@ -1180,6 +1180,7 @@ function ReadingView({
   }
   const [anchor, setAnchor] = useState<Anchor>(initial.current.anchor);
   const [panel, setPanel] = useState<"toc" | "bookmarks" | "info" | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const viewport = useRef<HTMLDivElement>(null);
   const pointer = useRef<{ x: number; y: number } | null>(null);
@@ -1582,8 +1583,10 @@ function ReadingView({
           </div>
         </main>
         <aside
+          id="reader-settings-panel"
           className="reader-settings"
           aria-labelledby="reader-settings-title"
+          hidden={!settingsOpen}
         >
           <div className="reader-settings-head">
             <div className="reader-settings-heading">
@@ -1618,6 +1621,15 @@ function ReadingView({
             >
               <BookmarkIcon size={19} />
               <span>しおり</span>
+            </button>
+            <button
+              aria-label={settingsOpen ? "読書設定を閉じる" : "読書設定を開く"}
+              aria-expanded={settingsOpen}
+              aria-controls="reader-settings-panel"
+              onClick={() => setSettingsOpen((open) => !open)}
+            >
+              <Settings2 size={19} />
+              <span>設定</span>
             </button>
           </div>
           <div className="page-controls">

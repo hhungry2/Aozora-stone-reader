@@ -133,6 +133,8 @@ test.describe("scrollable reader settings", () => {
     page,
   }) => {
     const rendered = await openReader(page);
+    await page.getByRole("button", { name: "読書設定を開く" }).click();
+    await expect(page.locator(".reader-loading")).toHaveCount(0);
     const firstPageEnd = await rendered.getAttribute("data-end");
     const settingsPanel = page.locator(".reader-settings-scroll");
     await expect(settingsPanel).toBeVisible();
@@ -156,7 +158,7 @@ test.describe("scrollable reader settings", () => {
     await expect(rendered).toHaveAttribute("data-start", "0");
     await expect(rendered).toHaveAttribute("data-end", firstPageEnd!);
 
-    // The always-visible settings do not block paging the text.
+    // The open settings do not block paging the text.
     await pointAtText(page);
     await page.mouse.wheel(0, 120);
     await expect(rendered).toHaveAttribute("data-start", firstPageEnd!);

@@ -44,6 +44,9 @@ test("all playground typography settings reflow at the same anchor and persist",
     .getByRole("button", { name: "このページにしおりを挟む", exact: true })
     .click();
   const settingsPanel = page.getByRole("complementary", { name: "読書の設定" });
+  await page
+    .getByRole("button", { name: "読書設定を開く", exact: true })
+    .click();
   await expect(settingsPanel).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   const textBounds = await page.getByTestId("reader-viewport").boundingBox();
@@ -103,6 +106,9 @@ test("all playground typography settings reflow at the same anchor and persist",
     .click();
   await expect(page.locator(".bookmark-item")).toHaveCount(1);
   await page.getByRole("button", { name: "閉じる", exact: true }).click();
+  await page
+    .getByRole("button", { name: "読書設定を開く", exact: true })
+    .click();
   for (const [label, value] of [
     ["文字方向", "lrTb"],
     ["約物", "whole"],
@@ -143,4 +149,50 @@ test("all playground typography settings reflow at the same anchor and persist",
   await expect(rendered.locator(".reader-glyph-frames")).toHaveCount(0);
   await expect(rendered).toHaveAttribute("data-block", savedBlock!);
   await expect(rendered).toHaveAttribute("data-offset", savedOffset!);
+});
+
+test("toggling settings resizes the text area and keeps the passage and settings", async ({
+  page,
+}) => {
+  await page.goto("/#/read/000127");
+  const rendered = page.getByTestId("reader-page");
+  const viewport = page.getByTestId("reader-viewport");
+  const panel = page.locator("#reader-settings-panel");
+  const toggle = page.locator('[aria-controls="reader-settings-panel"]');
+  await expect(rendered.locator("svg")).toBeVisible();
+  await expect(page.locator(".reader-loading")).toHaveCount(0);
+  await expect(panel).toBeHidden();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  const closedBounds = await viewport.boundingBox();
+  await page.getByRole("button", { name: "次のページ", exact: true }).click();
+  await expect(rendered).not.toHaveAttribute("data-start", "0");
+  await expect(page.locator(".reader-loading")).toHaveCount(0);
+  const block = await rendered.getAttribute("data-block");
+  const offset = await rendered.getAttribute("data-offset");
+  for (let cycle = 0; cycle < 2; cycle++) {
+    await toggle.click();
+    await expect(panel).toBeVisible();
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(page.locator(".reader-loading")).toHaveCount(0);
+    const openBounds = await viewport.boundingBox();
+    expect(
+      openBounds!.width < closedBounds!.width ||
+        openBounds!.height < closedBounds!.height,
+    ).toBe(true);
+    await panel.getByLabel("フォントサイズ", { exact: true }).fill("24");
+    await expect(page.locator(".reader-loading")).toHaveCount(0);
+    await expect(rendered).toHaveAttribute("data-block", block!);
+    await expect(rendered).toHaveAttribute("data-offset", offset!);
+    await toggle.click();
+    await expect(panel).toBeHidden();
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(page.locator(".reader-loading")).toHaveCount(0);
+    expect(await viewport.boundingBox()).toEqual(closedBounds);
+    await expect(rendered).toHaveAttribute("data-block", block!);
+    await expect(rendered).toHaveAttribute("data-offset", offset!);
+  }
+  await toggle.click();
+  await expect(panel.getByLabel("フォントサイズ", { exact: true })).toHaveValue(
+    "24",
+  );
 });
