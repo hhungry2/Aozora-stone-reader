@@ -23,9 +23,10 @@ for (const direction of ['tbRl', 'lrTb'] as const) describe(`Stone pagination ${
     expect(whole.context.runs[0].frame[axis]).toBeCloseTo(20);
     expect(half.context.runs[0].frame[axis]).toBeCloseTo(10);
     const shortLine = fixture([{ text: 'あああ。次' }]);
+    // Fit three 20px cells after the leading and trailing paint insets.
     const pages = [false, true].map((kinsoku) => new PaginationEngine(shortLine, {
       ...defaultSettings, direction, punctuationMode: 'whole', dividesByWords: false, kinsoku,
-    }, direction === 'tbRl' ? 200 : 76, direction === 'tbRl' ? 76 : 200).pageAtPosition(0));
+    }, direction === 'tbRl' ? 200 : 82, direction === 'tbRl' ? 82 : 200).pageAtPosition(0));
     expect(pages[0].context.runs[3].line).toBeGreaterThan(pages[0].context.runs[2].line);
     expect(pages[1].context.runs[3].line).toBe(pages[1].context.runs[2].line);
   });
