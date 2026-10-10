@@ -45,6 +45,11 @@
 * {
   box-sizing: border-box;
 }
+::selection {
+  background-color: #ffeb3b;
+  color: #282f2b;
+  fill: #282f2b;
+}
 body {
   margin: 0;
   min-width: 320px;
@@ -1430,13 +1435,113 @@ button {
 }
 .reader-main {
   width: min(1090px, 100%);
+  max-width: 1090px;
   margin: 0 auto;
   flex: 1;
+  min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
   padding: 0 50px;
   outline: 0;
+}
+.reader-workspace {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.reader-settings {
+  display: flex;
+  flex-direction: column;
+  width: 304px;
+  flex-shrink: 0;
+  min-height: 0;
+  border-left: 1px solid var(--line);
+  background: var(--surface);
+}
+.reader-settings-head {
+  flex-shrink: 0;
+  padding: 18px 20px 15px;
+  border-bottom: 1px solid var(--line);
+}
+.reader-settings-heading {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--green);
+}
+.reader-settings-heading h2 {
+  font-size: 14px;
+  font-weight: 500;
+}
+.reader-settings-head p {
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.reader-settings-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+  padding: 18px 20px;
+  scroll-padding: 18px;
+}
+.reader-settings .setting-group {
+  margin-bottom: 18px;
+}
+.reader-settings .setting-group label {
+  margin-bottom: 8px;
+}
+.reader-settings .setting-group select {
+  min-height: 44px;
+  padding: 8px;
+  font-size: 12px;
+}
+.reader-settings .typography-row {
+  gap: 12px;
+}
+.reader-settings .typography-range {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+.reader-settings .typography-range label,
+.reader-settings .typography-range output {
+  margin-bottom: 0;
+}
+.reader-settings .typography-range output {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.reader-settings .typography-range input {
+  grid-column: 1 / -1;
+}
+.reader-settings .typography-checks {
+  gap: 0;
+  margin-bottom: 18px;
+}
+.reader-settings .typography-checks label {
+  font-size: 12px;
+}
+.reader-settings .theme-options {
+  gap: 8px;
+}
+.reader-settings .theme-choice {
+  height: 44px;
+  gap: 5px;
+  padding: 0 4px;
+}
+.reader-settings .switch-group {
+  padding-top: 18px;
+}
+.reader-settings .switch-group label {
+  margin-bottom: 5px;
+}
+.reader-settings .text-link {
+  min-height: 44px;
+  font-size: 12px;
 }
 .reader-running-head {
   padding: 24px 0 22px;
@@ -1688,6 +1793,29 @@ button {
   }
 }
 @media (max-width: 800px) {
+  .reader-workspace {
+    flex-direction: column;
+  }
+  .reader-settings {
+    width: 100%;
+    flex: 0 0 42%;
+    max-height: 320px;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+  .reader-settings-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 20px;
+  }
+  .reader-settings-head p {
+    margin: 0;
+  }
+  .reader-settings-scroll {
+    padding: 14px 20px;
+  }
   .site-header {
     height: 83px;
   }
@@ -1848,7 +1976,10 @@ button {
     gap: 7px;
   }
   .reader-running-head {
-    padding: 20px 0 18px;
+    padding: 14px 0;
+  }
+  .reader-page-bottom {
+    padding: 12px 0;
   }
   .toolbar-tools,
   .bookmark-add {
@@ -2254,7 +2385,7 @@ button {
   }
   .reader-running-head {
     font-size: 8px;
-    padding: 17px 0 18px;
+    padding: 14px 0;
   }
   .reader-running-head > span:last-child {
     font-size: 6px;
@@ -2262,7 +2393,7 @@ button {
   }
   .reader-page-bottom {
     font-size: 8px;
-    padding: 18px 0 20px;
+    padding: 12px 0;
   }
   .reader-end {
     gap: 5px;
@@ -2323,7 +2454,7 @@ button {
     font-size: 22px;
   }
   .reader-shell {
-    min-height: 350px;
+    min-height: 400px;
   }
 }
 @media (max-width: 360px) {

@@ -129,22 +129,21 @@ test("small wheel deltas accumulate, a burst advances once, and zoom shortcuts s
 
 test.describe("scrollable reader settings", () => {
   test.use({ viewport: { width: 390, height: 480 } });
-  test("scrolling the settings dialog scrolls its contents and preserves the reading page", async ({
+  test("settings scroll independently while the visible text remains readable and pageable", async ({
     page,
   }) => {
     const rendered = await openReader(page);
     const firstPageEnd = await rendered.getAttribute("data-end");
-    await page.getByRole("button", { name: "読書設定を開く" }).click();
-    const dialog = page.getByRole("dialog", { name: "読書の設定" });
-    await expect(dialog).toBeVisible();
+    const settingsPanel = page.locator(".reader-settings-scroll");
+    await expect(settingsPanel).toBeVisible();
     await expect
       .poll(() =>
-        dialog.evaluate(
+        settingsPanel.evaluate(
           (element) => element.scrollHeight > element.clientHeight,
         ),
       )
       .toBe(true);
-    const bounds = await dialog.boundingBox();
+    const bounds = await settingsPanel.boundingBox();
     expect(bounds).not.toBeNull();
     await page.mouse.move(
       bounds!.x + bounds!.width / 2,
@@ -152,12 +151,19 @@ test.describe("scrollable reader settings", () => {
     );
     await page.mouse.wheel(0, 240);
     await expect
-      .poll(() => dialog.evaluate((element) => element.scrollTop))
+      .poll(() => settingsPanel.evaluate((element) => element.scrollTop))
       .toBeGreaterThan(0);
     await expect(rendered).toHaveAttribute("data-start", "0");
     await expect(rendered).toHaveAttribute("data-end", firstPageEnd!);
 
-    // Even a wheel dispatched directly to the underlying text is ignored while a dialog is open.
+    // The always-visible settings do not block paging the text.
+    await pointAtText(page);
+    await page.mouse.wheel(0, 120);
+    await expect(rendered).toHaveAttribute("data-start", firstPageEnd!);
+    await expect(page.locator(".reader-loading")).toHaveCount(0);
+
+    // Other modal panels still block wheel paging beneath them.
+    await page.getByRole("button", { name: "目次を開く" }).click();
     const cancelled = await page
       .getByTestId("reader-viewport")
       .evaluate((element) => {
@@ -170,7 +176,6 @@ test.describe("scrollable reader settings", () => {
         return event.defaultPrevented;
       });
     expect(cancelled).toBe(false);
-    await expect(rendered).toHaveAttribute("data-start", "0");
-    await expect(rendered).toHaveAttribute("data-end", firstPageEnd!);
+    await expect(rendered).toHaveAttribute("data-start", firstPageEnd!);
   });
 });

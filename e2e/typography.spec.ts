@@ -43,29 +43,42 @@ test("all playground typography settings reflow at the same anchor and persist",
   await page
     .getByRole("button", { name: "このページにしおりを挟む", exact: true })
     .click();
-  await page
-    .getByRole("button", { name: "読書設定を開く", exact: true })
-    .click();
-  const dialog = page.getByRole("dialog", { name: "読書の設定" });
-  await expect(dialog).toBeVisible();
-  await dialog.getByLabel("文字方向", { exact: true }).selectOption("lrTb");
-  await dialog.getByLabel("約物", { exact: true }).selectOption("whole");
-  await dialog.getByLabel("文字寄せ", { exact: true }).selectOption("center");
-  await dialog.getByLabel("行の寄せ", { exact: true }).selectOption("end");
-  await dialog.getByLabel("フォントサイズ", { exact: true }).fill("21");
-  await dialog.getByLabel("行送り", { exact: true }).fill("1.8");
-  await dialog
+  const settingsPanel = page.getByRole("complementary", { name: "読書の設定" });
+  await expect(settingsPanel).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  const textBounds = await page.getByTestId("reader-viewport").boundingBox();
+  const settingsBounds = await settingsPanel.boundingBox();
+  expect(textBounds!.width).toBeGreaterThan(200);
+  expect(textBounds!.height).toBeGreaterThan(80);
+  expect(
+    textBounds!.x + textBounds!.width <= settingsBounds!.x + 1 ||
+      textBounds!.y + textBounds!.height <= settingsBounds!.y + 1,
+  ).toBe(true);
+  await settingsPanel
+    .getByLabel("文字方向", { exact: true })
+    .selectOption("lrTb");
+  await settingsPanel.getByLabel("約物", { exact: true }).selectOption("whole");
+  await settingsPanel
+    .getByLabel("文字寄せ", { exact: true })
+    .selectOption("center");
+  await settingsPanel
+    .getByLabel("行の寄せ", { exact: true })
+    .selectOption("end");
+  await settingsPanel.getByLabel("フォントサイズ", { exact: true }).fill("21");
+  await settingsPanel.getByLabel("行送り", { exact: true }).fill("1.8");
+  await settingsPanel
     .getByLabel("和文フォント", { exact: true })
     .selectOption("noto-sans");
-  await dialog
+  await settingsPanel
     .getByLabel("欧文フォント", { exact: true })
     .selectOption("times");
-  await dialog.getByLabel("欧文スケール", { exact: true }).fill("0.83");
+  await settingsPanel.getByLabel("欧文スケール", { exact: true }).fill("0.83");
   for (const label of ["禁則処理", "単語で改行（単語を分割しない）", "縦中横"])
-    await dialog.getByLabel(label, { exact: true }).uncheck();
-  await dialog.getByLabel("文字の枠を表示", { exact: true }).check();
-  await dialog.getByRole("button", { name: "暗色", exact: true }).click();
-  await dialog.getByRole("button", { name: "閉じる", exact: true }).click();
+    await settingsPanel.getByLabel(label, { exact: true }).uncheck();
+  await settingsPanel.getByLabel("文字の枠を表示", { exact: true }).check();
+  await settingsPanel
+    .getByRole("button", { name: "暗色", exact: true })
+    .click();
   await expect(page.locator(".reader-loading")).toHaveCount(0);
   await expect(rendered).toHaveAttribute("data-block", savedBlock!);
   await expect(rendered).toHaveAttribute("data-offset", savedOffset!);
@@ -90,9 +103,6 @@ test("all playground typography settings reflow at the same anchor and persist",
     .click();
   await expect(page.locator(".bookmark-item")).toHaveCount(1);
   await page.getByRole("button", { name: "閉じる", exact: true }).click();
-  await page
-    .getByRole("button", { name: "読書設定を開く", exact: true })
-    .click();
   for (const [label, value] of [
     ["文字方向", "lrTb"],
     ["約物", "whole"],
@@ -104,26 +114,31 @@ test("all playground typography settings reflow at the same anchor and persist",
     ["欧文フォント", "times"],
     ["欧文スケール", "0.83"],
   ])
-    await expect(dialog.getByLabel(label, { exact: true })).toHaveValue(value);
+    await expect(settingsPanel.getByLabel(label, { exact: true })).toHaveValue(
+      value,
+    );
   for (const label of ["禁則処理", "単語で改行（単語を分割しない）", "縦中横"])
-    await expect(dialog.getByLabel(label, { exact: true })).not.toBeChecked();
+    await expect(
+      settingsPanel.getByLabel(label, { exact: true }),
+    ).not.toBeChecked();
   await expect(
-    dialog.getByLabel("文字の枠を表示", { exact: true }),
+    settingsPanel.getByLabel("文字の枠を表示", { exact: true }),
   ).toBeChecked();
-  await dialog
+  await settingsPanel
     .getByRole("button", { name: "初期設定に戻す", exact: true })
     .click();
-  await expect(dialog.getByLabel("文字方向", { exact: true })).toHaveValue(
-    "tbRl",
-  );
   await expect(
-    dialog.getByLabel("フォントサイズ", { exact: true }),
+    settingsPanel.getByLabel("文字方向", { exact: true }),
+  ).toHaveValue("tbRl");
+  await expect(
+    settingsPanel.getByLabel("フォントサイズ", { exact: true }),
   ).toHaveValue("20");
-  await expect(dialog.getByLabel("禁則処理", { exact: true })).toBeChecked();
   await expect(
-    dialog.getByLabel("文字の枠を表示", { exact: true }),
+    settingsPanel.getByLabel("禁則処理", { exact: true }),
+  ).toBeChecked();
+  await expect(
+    settingsPanel.getByLabel("文字の枠を表示", { exact: true }),
   ).not.toBeChecked();
-  await dialog.getByRole("button", { name: "閉じる", exact: true }).click();
   await expect(page.locator(".reader-loading")).toHaveCount(0);
   await expect(rendered.locator(".reader-glyph-frames")).toHaveCount(0);
   await expect(rendered).toHaveAttribute("data-block", savedBlock!);

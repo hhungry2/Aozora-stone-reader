@@ -1179,9 +1179,7 @@ function ReadingView({
       : { anchor: createAnchor(book, book.blocks[0].id, 0), adjusted: false };
   }
   const [anchor, setAnchor] = useState<Anchor>(initial.current.anchor);
-  const [panel, setPanel] = useState<
-    "settings" | "toc" | "bookmarks" | "info" | null
-  >(null);
+  const [panel, setPanel] = useState<"toc" | "bookmarks" | "info" | null>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const viewport = useRef<HTMLDivElement>(null);
   const pointer = useRef<{ x: number; y: number } | null>(null);
@@ -1284,7 +1282,7 @@ function ReadingView({
         panel ||
         document.querySelector("dialog[open]") ||
         (event.target as HTMLElement).closest(
-          "input,select,textarea,button,a,[contenteditable]",
+          ".reader-settings,input,select,textarea,button,a,[contenteditable]",
         )
       )
         return;
@@ -1486,99 +1484,124 @@ function ReadingView({
           </button>
         </div>
       </header>
-      <main id="main-content" tabIndex={-1} className="reader-main">
-        <div className="reader-running-head">
-          <span>
-            {vertical ? "縦書き" : "横書き"} /{" "}
-            {
-              japaneseFontOptions.find(
-                ([value]) => value === settings.font,
-              )?.[1]
-            }
-          </span>
-          <span>AOZORA COLLECTION {String(index + 1).padStart(2, "0")}</span>
-        </div>
-        <div
-          className="reader-viewport"
-          ref={viewport}
-          data-testid="reader-viewport"
-          onPointerDown={(event) => {
-            if (event.pointerType === "touch")
-              pointer.current = { x: event.clientX, y: event.clientY };
-          }}
-          onPointerUp={(event) => {
-            if (!pointer.current || window.getSelection()?.toString()) {
+      <div className="reader-workspace">
+        <main id="main-content" tabIndex={-1} className="reader-main">
+          <div className="reader-running-head">
+            <span>
+              {vertical ? "縦書き" : "横書き"} /{" "}
+              {
+                japaneseFontOptions.find(
+                  ([value]) => value === settings.font,
+                )?.[1]
+              }
+            </span>
+            <span>AOZORA COLLECTION {String(index + 1).padStart(2, "0")}</span>
+          </div>
+          <div
+            className="reader-viewport"
+            ref={viewport}
+            data-testid="reader-viewport"
+            onPointerDown={(event) => {
+              if (event.pointerType === "touch")
+                pointer.current = { x: event.clientX, y: event.clientY };
+            }}
+            onPointerUp={(event) => {
+              if (!pointer.current || window.getSelection()?.toString()) {
+                pointer.current = null;
+                return;
+              }
+              const dx = event.clientX - pointer.current.x,
+                dy = event.clientY - pointer.current.y;
               pointer.current = null;
-              return;
-            }
-            const dx = event.clientX - pointer.current.x,
-              dy = event.clientY - pointer.current.y;
-            pointer.current = null;
-            if (Math.abs(dx) > 65 && Math.abs(dx) > Math.abs(dy) * 1.5)
-              advance(vertical ? dx > 0 : dx < 0);
-          }}
-          onPointerCancel={() => {
-            pointer.current = null;
-          }}
-        >
-          {page && (
-            <div
-              className="reader-page-wrap"
-              data-testid="reader-page"
-              data-block={page.start.blockId}
-              data-offset={page.start.offset}
-              data-start={page.globalStart}
-              data-end={page.globalEnd}
-            >
-              <ReaderPage page={page} settings={settings} />
-            </div>
-          )}
-          {loading && (
-            <div
-              className={`reader-loading ${page ? "subtle" : ""}`}
-              role="status"
-            >
-              <LoaderCircle className="spin" size={25} />
-              <span>文字を整えています</span>
-            </div>
-          )}
-          {error && (
-            <div className="reader-error" role="alert">
-              <Info />
-              <p>{error}</p>
-              <button className="button" onClick={retryLayout}>
-                再試行
-              </button>
-              <a
-                className="external-link"
-                href={book.cardUrl}
-                target="_blank"
-                rel="noreferrer"
+              if (Math.abs(dx) > 65 && Math.abs(dx) > Math.abs(dy) * 1.5)
+                advance(vertical ? dx > 0 : dx < 0);
+            }}
+            onPointerCancel={() => {
+              pointer.current = null;
+            }}
+          >
+            {page && (
+              <div
+                className="reader-page-wrap"
+                data-testid="reader-page"
+                data-block={page.start.blockId}
+                data-offset={page.start.offset}
+                data-start={page.globalStart}
+                data-end={page.globalEnd}
               >
-                青空文庫で原文を開く <ExternalLink size={14} />
-              </a>
-            </div>
-          )}
-        </div>
-        <div className="reader-page-bottom">
-          <span className="reader-end">
-            {isEnd ? (
-              <>
-                <Check size={14} />
-                読み終わり{" "}
-                <button className="text-link" onClick={() => setPanel("info")}>
-                  底本・制作情報
-                </button>
-              </>
-            ) : (
-              "言葉のつづきへ。"
+                <ReaderPage page={page} settings={settings} />
+              </div>
             )}
-          </span>
-          <span aria-live="polite">
-            {Math.round((isEnd ? 1 : progress) * 100)}% 読了
-          </span>
-        </div>
-      </main>
+            {loading && (
+              <div
+                className={`reader-loading ${page ? "subtle" : ""}`}
+                role="status"
+              >
+                <LoaderCircle className="spin" size={25} />
+                <span>文字を整えています</span>
+              </div>
+            )}
+            {error && (
+              <div className="reader-error" role="alert">
+                <Info />
+                <p>{error}</p>
+                <button className="button" onClick={retryLayout}>
+                  再試行
+                </button>
+                <a
+                  className="external-link"
+                  href={book.cardUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  青空文庫で原文を開く <ExternalLink size={14} />
+                </a>
+              </div>
+            )}
+          </div>
+          <div className="reader-page-bottom">
+            <span className="reader-end">
+              {isEnd ? (
+                <>
+                  <Check size={14} />
+                  読み終わり{" "}
+                  <button
+                    className="text-link"
+                    onClick={() => setPanel("info")}
+                  >
+                    底本・制作情報
+                  </button>
+                </>
+              ) : (
+                "言葉のつづきへ。"
+              )}
+            </span>
+            <span aria-live="polite">
+              {Math.round((isEnd ? 1 : progress) * 100)}% 読了
+            </span>
+          </div>
+        </main>
+        <aside
+          className="reader-settings"
+          aria-labelledby="reader-settings-title"
+        >
+          <div className="reader-settings-head">
+            <div className="reader-settings-heading">
+              <Settings2 size={17} aria-hidden="true" />
+              <h2 id="reader-settings-title">読書の設定</h2>
+            </div>
+            <p>変更は本文にすぐ反映されます</p>
+          </div>
+          <div
+            className="reader-settings-scroll"
+            role="region"
+            tabIndex={0}
+            aria-label="読書設定の項目"
+          >
+            <SettingsPanel settings={settings} onChange={onSettings} />
+          </div>
+        </aside>
+      </div>
       <footer className="reader-toolbar">
         <div className="reader-progress-line">
           <i style={{ width: `${(isEnd ? 1 : progress) * 100}%` }} />
@@ -1595,13 +1618,6 @@ function ReadingView({
             >
               <BookmarkIcon size={19} />
               <span>しおり</span>
-            </button>
-            <button
-              aria-label="読書設定を開く"
-              onClick={() => setPanel("settings")}
-            >
-              <Settings2 size={19} />
-              <span>設定</span>
             </button>
           </div>
           <div className="page-controls">
@@ -1623,11 +1639,6 @@ function ReadingView({
           </button>
         </div>
       </footer>
-      {panel === "settings" && (
-        <Modal title="読書の設定" onClose={() => setPanel(null)}>
-          <SettingsPanel settings={settings} onChange={onSettings} />
-        </Modal>
-      )}
       {panel === "info" && (
         <WorkInfo
           book={book}

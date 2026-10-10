@@ -32,6 +32,8 @@ test('copying a page or a selected passage preserves source text without ruby or
       const allRange = document.createRange(); allRange.selectNodeContents(container);
       const fullCopy = copy(allRange, container);
       const glyphs = [...svg.querySelectorAll('[data-run]')];
+      const selectedStyle = getComputedStyle(glyphs[0], '::selection');
+      const selectionColors = { background: selectedStyle.backgroundColor, color: selectedStyle.color, fill: selectedStyle.fill };
       const first = glyphs[3]; const last = glyphs[Math.min(45, glyphs.length - 1)];
       const partialRange = document.createRange(); partialRange.setStart(first.firstChild!, 0);
       partialRange.setEnd(last.firstChild!, last.firstChild!.textContent!.length);
@@ -41,12 +43,13 @@ test('copying a page or a selected passage preserves source text without ruby or
       const from = Number(first.getAttribute('data-run')); const to = Number(last.getAttribute('data-run')) + 1;
       const expectedPartial = segments.slice(from, to).map((segment) => segment.segment).join('');
       selection.removeAllRanges();
-      return { pageText, expectedPartial, svgCopy, fullCopy, partialCopy, sourceLength: normalized.length };
+      return { pageText, expectedPartial, svgCopy, fullCopy, partialCopy, selectionColors, sourceLength: normalized.length };
     });
     expect(actual.sourceLength).toBeGreaterThan(actual.pageText.length);
     expect(actual.svgCopy).toEqual({ text: actual.pageText, prevented: true });
     expect(actual.fullCopy).toEqual({ text: actual.pageText, prevented: true });
     expect(actual.partialCopy).toEqual({ text: actual.expectedPartial, prevented: true });
+    expect(actual.selectionColors).toEqual({ background: 'rgb(255, 235, 59)', color: 'rgb(40, 47, 43)', fill: 'rgb(40, 47, 43)' });
     await rendered.evaluate((wrapper) => {
       const svg = wrapper.querySelector('svg')!;
       const range = document.createRange(); range.selectNodeContents(svg);
@@ -85,6 +88,15 @@ test('a gaiji inside ruby retains both its image description and reading for scr
   const rendered = page.getByTestId('reader-page');
   await expect(rendered.locator('svg')).toBeVisible();
   const ruby = rendered.locator('.reader-accessible-text ruby').filter({ has: page.locator('[role="img"]') }).first();
+  // The settings pane reduces the page height on mobile; reach the passage
+  // containing the gaiji rather than assuming it is on the first page.
+  await expect(page.locator('.reader-loading')).toHaveCount(0);
+  for (let turns = 0; turns < 10 && await ruby.count() === 0; turns++) {
+    const end = await rendered.getAttribute('data-end');
+    await page.getByRole('button', { name: '次のページ', exact: true }).click();
+    await expect(rendered).toHaveAttribute('data-start', end!);
+    await expect(page.locator('.reader-loading')).toHaveCount(0);
+  }
   await expect(ruby.locator('[role="img"]')).toHaveAttribute('aria-label', '※(「埒のつくり＋虎」、第3水準1-91-48)');
   await expect(ruby.locator('rt')).toHaveText('かくりゃく');
   await expect(ruby).not.toContainText('\ufffc');
