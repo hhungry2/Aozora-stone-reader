@@ -56,6 +56,8 @@ export const FEATURED_WORK_IDS = [
   "002381",
   "000211",
   "000496",
+  "000652",
+  "055908",
 ] as const;
 const collator = new Intl.Collator("ja", {
   sensitivity: "base",
