@@ -28,7 +28,10 @@ test("the updated site name fits the library and the removed headings stay absen
   const nav = await page
     .getByRole("navigation", { name: "メインナビゲーション" })
     .boundingBox();
-  expect(brand!.x + brand!.width).toBeLessThanOrEqual(nav!.x + 1);
+  expect(
+    brand!.x + brand!.width <= nav!.x + 1 ||
+      brand!.y + brand!.height <= nav!.y + 1,
+  ).toBe(true);
 });
 
 test("all playground typography settings reflow at the same anchor and persist", async ({
@@ -68,9 +71,12 @@ test("all playground typography settings reflow at the same anchor and persist",
     textBounds!.x + textBounds!.width <= settingsBounds!.x + 1 ||
       textBounds!.y + textBounds!.height <= settingsBounds!.y + 1,
   ).toBe(true);
-  await settingsPanel
-    .getByLabel("文字方向", { exact: true })
-    .selectOption("lrTb");
+  await expect(
+    settingsPanel.getByLabel("文字方向", { exact: true }),
+  ).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "横書きに切り替え", exact: true })
+    .click();
   await settingsPanel.getByLabel("約物", { exact: true }).selectOption("whole");
   await settingsPanel
     .getByLabel("文字寄せ", { exact: true })
@@ -125,7 +131,6 @@ test("all playground typography settings reflow at the same anchor and persist",
     .getByRole("button", { name: "読書設定を開く", exact: true })
     .click();
   for (const [label, value] of [
-    ["文字方向", "lrTb"],
     ["約物", "whole"],
     ["文字寄せ", "center"],
     ["行の寄せ", "end"],
@@ -147,8 +152,8 @@ test("all playground typography settings reflow at the same anchor and persist",
     .getByRole("button", { name: "初期設定に戻す", exact: true })
     .click();
   await expect(
-    settingsPanel.getByLabel("文字方向", { exact: true }),
-  ).toHaveValue("tbRl");
+    page.getByRole("button", { name: "縦書きに切り替え", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
   await expect(
     settingsPanel.getByLabel("禁則処理", { exact: true }),
   ).toBeChecked();

@@ -143,7 +143,9 @@ test("full-book preparation allows reading and TOC jumps, reflows and only rende
   await page
     .getByRole("button", { name: "読書設定を開く", exact: true })
     .click();
-  await page.getByLabel("文字方向", { exact: true }).selectOption("lrTb");
+  await page
+    .getByRole("button", { name: "横書きに切り替え", exact: true })
+    .click();
   await page
     .getByRole("combobox", { name: "ページ表示", exact: true })
     .selectOption("spread");

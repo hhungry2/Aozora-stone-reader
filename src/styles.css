@@ -453,6 +453,7 @@ button {
   border-radius: 50%;
 }
 .book-cover {
+  container-type: inline-size;
   aspect-ratio: 0.725;
   position: relative;
   overflow: hidden;
@@ -532,14 +533,17 @@ button {
 .cover-author {
   writing-mode: vertical-rl;
   position: absolute;
-  top: 25%;
-  left: 24%;
+  bottom: 18%;
+  left: 20%;
   font-family: var(--serif);
   font-size: 10px;
   letter-spacing: 0.2em;
   max-height: 60%;
   z-index: 2;
   line-height: 1.8;
+}
+.book-cover-button .cover-title {
+  font-size: clamp(12px, 14cqw, 28px);
 }
 .cover-edition {
   position: absolute;
@@ -1913,7 +1917,7 @@ button {
   gap: 20px;
 }
 .toolbar-tools > button,
-.toolbar-settings {
+.toolbar-toc {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1923,11 +1927,11 @@ button {
   color: var(--muted);
 }
 .toolbar-tools > button:hover,
-.toolbar-settings:hover,
-.toolbar-settings[aria-expanded="true"] {
+.toolbar-tools > button[aria-expanded="true"],
+.toolbar-toc:hover {
   color: var(--green);
 }
-.toolbar-settings {
+.toolbar-toc {
   justify-self: end;
   justify-content: center;
 }
@@ -2240,7 +2244,7 @@ button {
     padding: 6px 0;
   }
   .toolbar-tools > button,
-  .toolbar-settings {
+  .toolbar-toc {
     flex-direction: column;
     gap: 5px;
     font-size: 9px;
@@ -2530,7 +2534,7 @@ button {
   }
   .cover-author {
     font-size: 9px;
-    left: 22%;
+    left: 20%;
   }
   .cover-edition {
     font-size: 6px;
@@ -2661,7 +2665,7 @@ button {
     font-size: 8px;
   }
   .toolbar-tools > button,
-  .toolbar-settings {
+  .toolbar-toc {
     font-size: 9px;
     gap: 4px;
     padding: 0;

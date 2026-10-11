@@ -4,8 +4,8 @@ import { expect, test, type Page } from "@playwright/test";
 // mouse input while retaining each project's screen size and touch capability.
 test.use({ isMobile: false });
 
-async function openReader(page: Page) {
-  await page.goto("/#/read/000127");
+async function openReader(page: Page, id = "000127") {
+  await page.goto(`/#/read/${id}`);
   const rendered = page.getByTestId("reader-page");
   await expect(rendered.locator("svg")).toBeVisible();
   await expect(page.locator(".reader-loading")).toHaveCount(0);
@@ -132,7 +132,7 @@ test.describe("scrollable reader settings", () => {
   test("settings scroll independently while the visible text remains readable and pageable", async ({
     page,
   }) => {
-    const rendered = await openReader(page);
+    const rendered = await openReader(page, "000752");
     await page.getByRole("button", { name: "読書設定を開く" }).click();
     await expect(page.locator(".reader-loading")).toHaveCount(0);
     const firstPageEnd = await rendered.getAttribute("data-end");

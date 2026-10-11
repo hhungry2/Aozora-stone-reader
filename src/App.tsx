@@ -614,40 +614,22 @@ function SettingsPanel({
               : "表示するページと次の1ページを準備します。"}
         </p>
       </div>
-      <div className="typography-row">
-        <div className="setting-group">
-          <label htmlFor="writing-direction">文字方向</label>
-          <select
-            id="writing-direction"
-            value={settings.direction}
-            onChange={(event) =>
-              set(
-                "direction",
-                event.target.value as ReaderSettings["direction"],
-              )
-            }
-          >
-            <option value="lrTb">横書き (lrTb)</option>
-            <option value="tbRl">縦書き (tbRl)</option>
-          </select>
-        </div>
-        <div className="setting-group">
-          <label htmlFor="punctuation-mode">約物</label>
-          <select
-            id="punctuation-mode"
-            value={settings.punctuationMode}
-            onChange={(event) =>
-              set(
-                "punctuationMode",
-                event.target.value as ReaderSettings["punctuationMode"],
-              )
-            }
-          >
-            <option value="stone">stone</option>
-            <option value="whole">常に全角</option>
-            <option value="half">常に半角</option>
-          </select>
-        </div>
+      <div className="setting-group">
+        <label htmlFor="punctuation-mode">約物</label>
+        <select
+          id="punctuation-mode"
+          value={settings.punctuationMode}
+          onChange={(event) =>
+            set(
+              "punctuationMode",
+              event.target.value as ReaderSettings["punctuationMode"],
+            )
+          }
+        >
+          <option value="stone">stone</option>
+          <option value="whole">常に全角</option>
+          <option value="half">常に半角</option>
+        </select>
       </div>
       <div className="typography-row">
         <div className="setting-group">
@@ -1775,10 +1757,12 @@ function ReadingView({
   const removeBookmark = (id: string) => {
     const current = readerStorage.getRecord(book.id);
     if (!current) return;
+    const remaining = current.bookmarks.filter((b) => b.id !== id);
     onSave(book.id, {
       ...current,
-      bookmarks: current.bookmarks.filter((b) => b.id !== id),
+      bookmarks: remaining,
     });
+    if (!remaining.length) setPanel(null);
   };
   const hasBookmark =
     page &&
@@ -1888,14 +1872,16 @@ function ReadingView({
               />
               <span>しおり</span>
             </button>
-            <button
-              className="bookmark-list-toggle"
-              aria-label="しおり一覧を開く"
-              title="しおり一覧を開く"
-              onClick={() => setPanel("bookmarks")}
-            >
-              <ChevronDown size={14} aria-hidden="true" />
-            </button>
+            {bookmarks.length > 0 && (
+              <button
+                className="bookmark-list-toggle"
+                aria-label="しおり一覧を開く"
+                title="しおり一覧を開く"
+                onClick={() => setPanel("bookmarks")}
+              >
+                <ChevronDown size={14} aria-hidden="true" />
+              </button>
+            )}
           </div>
           <button
             className="reader-info-toggle"
@@ -2074,9 +2060,18 @@ function ReadingView({
         </div>
         <div className="toolbar-inner">
           <div className="toolbar-tools">
-            <button aria-label="目次を開く" onClick={() => setPanel("toc")}>
-              <List size={19} />
-              <span>目次</span>
+            <button
+              className="toolbar-settings"
+              aria-label={settingsOpen ? "読書設定を閉じる" : "読書設定を開く"}
+              aria-expanded={settingsOpen}
+              aria-controls="reader-settings-panel"
+              onClick={() => {
+                if (!settingsOpen) setInfoOpen(false);
+                setSettingsOpen((open) => !open);
+              }}
+            >
+              <Settings2 size={19} aria-hidden="true" />
+              <span>設定</span>
             </button>
             <ReaderQuickControls
               settings={settings}
@@ -2093,22 +2088,19 @@ function ReadingView({
             <span className="page-controls-divider" />
             {vertical ? previous : next}
           </div>
-          <button
-            className="toolbar-settings"
-            aria-label={settingsOpen ? "読書設定を閉じる" : "読書設定を開く"}
-            aria-expanded={settingsOpen}
-            aria-controls="reader-settings-panel"
-            onClick={() => {
-              if (!settingsOpen) setInfoOpen(false);
-              setSettingsOpen((open) => !open);
-            }}
-          >
-            <Settings2 size={19} aria-hidden="true" />
-            <span>設定</span>
-          </button>
+          {book.toc.length > 0 && (
+            <button
+              className="toolbar-toc"
+              aria-label="目次を開く"
+              onClick={() => setPanel("toc")}
+            >
+              <List size={19} aria-hidden="true" />
+              <span>目次</span>
+            </button>
+          )}
         </div>
       </footer>
-      {panel === "toc" && (
+      {panel === "toc" && book.toc.length > 0 && (
         <Modal title="目次" onClose={() => setPanel(null)}>
           <div className="toc-list">
             <button
@@ -2134,61 +2126,50 @@ function ReadingView({
               </button>
             ))}
           </div>
-          {!book.toc.length && (
-            <p className="fine-print">この作品に章の見出しはありません。</p>
-          )}
           <button className="text-link" onClick={openInfo}>
             底本・制作情報を読む <Info size={14} />
           </button>
         </Modal>
       )}
-      {panel === "bookmarks" && (
+      {panel === "bookmarks" && bookmarks.length > 0 && (
         <Modal title="挟んだしおり" onClose={() => setPanel(null)}>
           <div className="bookmark-list">
-            {bookmarks.length ? (
-              bookmarks.map((b) => (
-                <div className="bookmark-item" key={b.id}>
-                  <button
-                    className="bookmark-jump"
-                    onClick={() => {
-                      const restored = restoreAnchor(
-                        book,
-                        b.anchor,
-                        record!.contentVersion,
+            {bookmarks.map((b) => (
+              <div className="bookmark-item" key={b.id}>
+                <button
+                  className="bookmark-jump"
+                  onClick={() => {
+                    const restored = restoreAnchor(
+                      book,
+                      b.anchor,
+                      record!.contentVersion,
+                    );
+                    setAnchor(restored.anchor);
+                    setPanel(null);
+                    if (restored.adjusted)
+                      onNotify(
+                        "作品データの更新により、しおりの位置を調整しました",
                       );
-                      setAnchor(restored.anchor);
-                      setPanel(null);
-                      if (restored.adjusted)
-                        onNotify(
-                          "作品データの更新により、しおりの位置を調整しました",
-                        );
-                    }}
-                  >
-                    <BookmarkIcon size={16} />
-                    <span>
-                      <strong>{b.excerpt || "作品のはじめ"}</strong>
-                      <small>
-                        {new Date(b.createdAt).toLocaleDateString("ja-JP")} ·{" "}
-                        {Math.round(anchorProgress(book, b.anchor) * 100)}%
-                      </small>
-                    </span>
-                  </button>
-                  <button
-                    className="icon-button"
-                    aria-label="しおりを削除"
-                    onClick={() => removeBookmark(b.id)}
-                  >
-                    <Trash2 size={17} />
-                  </button>
-                </div>
-              ))
-            ) : (
-              <div className="empty-state">
-                <BookmarkIcon />
-                <h3>気になる言葉に、しおりを。</h3>
-                <p>上の「しおり」で、あとからこのページに戻れます。</p>
+                  }}
+                >
+                  <BookmarkIcon size={16} />
+                  <span>
+                    <strong>{b.excerpt || "作品のはじめ"}</strong>
+                    <small>
+                      {new Date(b.createdAt).toLocaleDateString("ja-JP")} ·{" "}
+                      {Math.round(anchorProgress(book, b.anchor) * 100)}%
+                    </small>
+                  </span>
+                </button>
+                <button
+                  className="icon-button"
+                  aria-label="しおりを削除"
+                  onClick={() => removeBookmark(b.id)}
+                >
+                  <Trash2 size={17} />
+                </button>
               </div>
-            )}
+            ))}
           </div>
         </Modal>
       )}

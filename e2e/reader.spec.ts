@@ -243,7 +243,10 @@ test("catalog, vertical/horizontal reading, position restoration, bookmarks and 
   await expect(page.locator(".bookmark-item")).toHaveCount(1);
   await page.getByRole("button", { name: "しおりを削除" }).click();
   await expect(page.locator(".bookmark-item")).toHaveCount(0);
-  await page.getByRole("button", { name: "閉じる", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "しおり一覧を開く" }),
+  ).toHaveCount(0);
   expect(failures).toEqual([]);
 });
 

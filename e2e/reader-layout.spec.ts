@@ -24,10 +24,10 @@ async function expectSingleToolbarRow(footer: Locator) {
   expect(Math.max(...centers) - Math.min(...centers)).toBeLessThanOrEqual(1);
 }
 
-test("reading actions sit in the header and the footer keeps contents, paging and settings in order", async ({
+test("reading actions sit in the header and the footer keeps settings, paging and contents in order", async ({
   page,
 }) => {
-  await page.goto("/#/read/000277", { waitUntil: "domcontentloaded" });
+  await page.goto("/#/read/000752", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("reader-page").locator("svg")).toBeVisible();
   await expect(page.locator(".reader-loading")).toHaveCount(0);
   const header = page.locator(".reader-header");
@@ -43,6 +43,8 @@ test("reading actions sit in the header and the footer keeps contents, paging an
   });
   await expect(theme).toBeVisible();
   await expect(bookmark).toHaveText("しおり");
+  await expect(bookmarkList).toHaveCount(0);
+  await bookmark.click();
   const mark = await bounds(bookmark);
   const list = await bounds(bookmarkList);
   expect(list.x).toBeGreaterThanOrEqual(mark.x + mark.width - 1);
@@ -81,8 +83,8 @@ test("reading actions sit in the header and the footer keeps contents, paging an
     footer.getByRole("button", { name: "読書設定を開く", exact: true }),
   );
   const toolbar = await bounds(footer);
-  expect(contents.x + contents.width).toBeLessThanOrEqual(paging.x);
-  expect(paging.x + paging.width).toBeLessThanOrEqual(settings.x);
+  expect(settings.x + settings.width).toBeLessThanOrEqual(paging.x);
+  expect(paging.x + paging.width).toBeLessThanOrEqual(contents.x);
   await expectSingleToolbarRow(footer);
   if (page.viewportSize()!.width > 900) {
     expect(
@@ -90,7 +92,6 @@ test("reading actions sit in the header and the footer keeps contents, paging an
     ).toBeLessThanOrEqual(12);
   }
 
-  await bookmark.click();
   await bookmarkList.click();
   const bookmarks = page.getByRole("dialog", {
     name: "挟んだしおり",
@@ -98,7 +99,11 @@ test("reading actions sit in the header and the footer keeps contents, paging an
   });
   await expect(bookmarks).toBeVisible();
   await expect(bookmarks.locator(".bookmark-item")).toHaveCount(1);
-  await bookmarks.getByRole("button", { name: "閉じる", exact: true }).click();
+  await bookmarks
+    .getByRole("button", { name: "しおりを削除", exact: true })
+    .click();
+  await expect(bookmarks).toHaveCount(0);
+  await expect(bookmarkList).toHaveCount(0);
   await footer.getByRole("button", { name: "目次を開く", exact: true }).click();
   const toc = page.getByRole("dialog", { name: "目次", exact: true });
   await expect(toc).toBeVisible();
@@ -109,6 +114,14 @@ test("reading actions sit in the header and the footer keeps contents, paging an
   await expect(
     page.getByRole("complementary", { name: "読書の設定" }),
   ).toBeVisible();
+  await expect(page.getByLabel("文字方向", { exact: true })).toHaveCount(0);
+  await header
+    .getByRole("button", { name: "横書きに切り替え", exact: true })
+    .click();
+  await expect(page.getByTestId("reader-page").locator("svg")).toHaveAttribute(
+    "data-stone-direction",
+    "lrTb",
+  );
   await footer
     .getByRole("button", { name: "読書設定を閉じる", exact: true })
     .click();
@@ -135,6 +148,12 @@ for (const width of [320, 795]) {
       expect(before.height).toBeGreaterThan(80);
       const header = page.locator(".reader-header");
       const footer = page.locator(".reader-toolbar");
+      await expect(
+        footer.getByRole("button", { name: "目次を開く" }),
+      ).toHaveCount(0);
+      await expect(
+        header.getByRole("button", { name: "しおり一覧を開く" }),
+      ).toHaveCount(0);
       await expectSingleToolbarRow(footer);
       const headerTargets = [
         header.getByRole("link", { name: "本棚へ", exact: true }),
