@@ -8,7 +8,6 @@ import {
   type ReactNode,
 } from "react";
 import {
-  ArrowDown,
   ArrowLeft,
   ArrowRight,
   Bookmark as BookmarkIcon,
@@ -22,7 +21,9 @@ import {
   Info,
   List,
   LoaderCircle,
+  Minus,
   Moon,
+  Plus,
   Search,
   Settings2,
   Sun,
@@ -180,9 +181,11 @@ function Modal({
 function About({
   onClose,
   onClear,
+  bookCount,
 }: {
   onClose: () => void;
   onClear: () => void;
+  bookCount: number;
 }) {
   const [confirm, setConfirm] = useState(false);
   return (
@@ -194,7 +197,8 @@ function About({
           stone-engine.js を使った、小さなブラウザの文庫です。
         </p>
         <p>
-          初版は、著作権が消滅した20作品を収録しています。文字の大きさや行間を整えて、あなたに合う読み方を見つけてください。
+          著作権が消滅した{bookCount}
+          作品を収録しています。文字の大きさや行間を整えて、あなたに合う読み方を見つけてください。
         </p>
         <h3>作品の出典</h3>
         <p>
@@ -367,6 +371,178 @@ function SettingRange({
   );
 }
 
+const readerThemes = [
+  ["light", "白"],
+  ["paper", "生成り"],
+  ["dark", "暗色"],
+] as const;
+
+function ReaderThemeToggle({
+  settings,
+  onChange,
+}: {
+  settings: ReaderSettings;
+  onChange: (settings: ReaderSettings) => void;
+}) {
+  const themeIndex = readerThemes.findIndex(
+    ([value]) => value === settings.theme,
+  );
+  const themeLabel = readerThemes[themeIndex][1];
+  const nextTheme = readerThemes[(themeIndex + 1) % readerThemes.length];
+  return (
+    <button
+      className="reader-theme-toggle"
+      aria-label={`配色を切り替え（現在：${themeLabel}）`}
+      title={`配色：${themeLabel}。クリックで${nextTheme[1]}に切り替え`}
+      onClick={() => onChange({ ...settings, theme: nextTheme[0] })}
+    >
+      {settings.theme === "dark" ? (
+        <Moon size={17} aria-hidden="true" />
+      ) : (
+        <Sun size={17} aria-hidden="true" />
+      )}
+      <span>{themeLabel}</span>
+    </button>
+  );
+}
+
+function ReaderQuickControls({
+  settings,
+  onChange,
+  onOpen,
+}: {
+  settings: ReaderSettings;
+  onChange: (settings: ReaderSettings) => void;
+  onOpen: () => void;
+}) {
+  const [active, setActive] = useState<"fontSize" | "lineHeight" | null>(null);
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!active) return;
+    root.current?.querySelector<HTMLInputElement>("input")?.focus();
+    const closeOutside = (event: PointerEvent) => {
+      if (!root.current?.contains(event.target as Node)) setActive(null);
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    return () => document.removeEventListener("pointerdown", closeOutside);
+  }, [active]);
+  const close = () => {
+    root.current
+      ?.querySelector<HTMLButtonElement>(
+        `[aria-controls="reader-${active}-control"]`,
+      )
+      ?.focus();
+    setActive(null);
+  };
+  const toggle = (key: "fontSize" | "lineHeight") => {
+    onOpen();
+    setActive(active === key ? null : key);
+  };
+  const fontSize = active === "fontSize";
+  const label = fontSize ? "フォントサイズ" : "行送り";
+  const value = fontSize ? settings.fontSize : settings.lineHeight;
+  const min = fontSize ? 10 : 1;
+  const max = fontSize ? 48 : 3;
+  const step = fontSize ? 1 : 0.05;
+  const setValue = (next: number) => {
+    if (active)
+      onChange({
+        ...settings,
+        [active]: Math.max(min, Math.min(max, Math.round(next * 100) / 100)),
+      });
+  };
+  return (
+    <div
+      className="reader-quick-controls"
+      ref={root}
+      role="group"
+      aria-label="読書の調整"
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && active) {
+          event.preventDefault();
+          event.stopPropagation();
+          close();
+        }
+        if (event.key === "Tab" && active) {
+          requestAnimationFrame(() => {
+            if (root.current && !root.current.contains(document.activeElement))
+              setActive(null);
+          });
+        }
+      }}
+    >
+      <button
+        className="reader-quick-button"
+        aria-label="フォントサイズを調整"
+        aria-description={`現在の文字サイズ：${settings.fontSize}px`}
+        title={`文字サイズ：${settings.fontSize}px`}
+        aria-expanded={active === "fontSize"}
+        aria-controls="reader-fontSize-control"
+        onClick={() => toggle("fontSize")}
+      >
+        <span>文字</span>
+        <strong>{settings.fontSize}px</strong>
+        <ChevronDown size={12} aria-hidden="true" />
+      </button>
+      <button
+        className="reader-quick-button"
+        aria-label="行送りを調整"
+        aria-description={`現在の行送り：${settings.lineHeight.toFixed(2)}倍`}
+        title={`行送り：×${settings.lineHeight.toFixed(2)}`}
+        aria-expanded={active === "lineHeight"}
+        aria-controls="reader-lineHeight-control"
+        onClick={() => toggle("lineHeight")}
+      >
+        <span>行送り</span>
+        <ChevronDown size={12} aria-hidden="true" />
+      </button>
+      {active && (
+        <div
+          id={`reader-${active}-control`}
+          className="reader-adjustment"
+          role="region"
+          aria-label={`${label}の調整`}
+        >
+          <button
+            className="adjustment-close"
+            aria-label="調整を閉じる"
+            onClick={close}
+          >
+            <X size={16} aria-hidden="true" />
+          </button>
+          <SettingRange
+            id={fontSize ? "font-size" : "line-height"}
+            label={label}
+            value={value}
+            min={min}
+            max={max}
+            step={step}
+            display={fontSize ? `${value}px` : `×${value.toFixed(2)}`}
+            onChange={setValue}
+          />
+          <div className="adjustment-steps">
+            <button
+              aria-label={`${label}を小さくする`}
+              disabled={value <= min}
+              onClick={() => setValue(value - step)}
+            >
+              <Minus size={16} aria-hidden="true" />
+            </button>
+            <span>{fontSize ? "10–48px" : "×1.00–3.00"}</span>
+            <button
+              aria-label={`${label}を大きくする`}
+              disabled={value >= max}
+              onClick={() => setValue(value + step)}
+            >
+              <Plus size={16} aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SettingsPanel({
   settings,
   onChange,
@@ -493,26 +669,6 @@ function SettingsPanel({
           </select>
         </div>
       </div>
-      <SettingRange
-        id="font-size"
-        label="フォントサイズ"
-        min={10}
-        max={48}
-        step={1}
-        value={settings.fontSize}
-        display={`${settings.fontSize}px`}
-        onChange={(value) => set("fontSize", value)}
-      />
-      <SettingRange
-        id="line-height"
-        label="行送り"
-        min={1}
-        max={3}
-        step={0.05}
-        value={settings.lineHeight}
-        display={`×${settings.lineHeight.toFixed(2)}`}
-        onChange={(value) => set("lineHeight", value)}
-      />
       <div className="setting-group">
         <label htmlFor="japanese-font">和文フォント</label>
         <select
@@ -574,23 +730,6 @@ function SettingsPanel({
           </label>
         ))}
       </div>
-      <div className="setting-group">
-        <label>配色</label>
-        <div className="theme-options">
-          {(["light", "paper", "dark"] as const).map((theme, i) => (
-            <button
-              key={theme}
-              className={`theme-choice ${theme}`}
-              aria-pressed={settings.theme === theme}
-              onClick={() => set("theme", theme)}
-            >
-              {theme === "dark" ? <Moon size={18} /> : <Sun size={18} />}
-              <span>{["白", "生成り", "暗色"][i]}</span>
-              {settings.theme === theme && <Check size={13} />}
-            </button>
-          ))}
-        </div>
-      </div>
       <div className="setting-group switch-group">
         <div>
           <label htmlFor="ruby-switch">ルビを表示</label>
@@ -622,6 +761,8 @@ export default function App() {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<"title" | "author">("title");
   const [filter, setFilter] = useState("all");
+  const [author, setAuthor] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
   const [recordVersion, setRecordVersion] = useState(0);
   const [toast, setToast] = useState("");
   const [book, setBook] = useState<Book | null>(null);
@@ -720,14 +861,32 @@ export default function App() {
   const resume = recent[0] && catalog.find((b) => b.id === recent[0].bookId);
   const featured =
     catalog.find((b) => b.title === "吾輩は猫である") || catalog[0];
-  const visible = filterCatalog(catalog, query, sort).filter((b) =>
-    filter === "short"
-      ? b.characterCount < 30000
-      : filter === "long"
-        ? b.characterCount >= 30000
-        : filter === "recent"
-          ? recent.some((r) => r.bookId === b.id)
-          : true,
+  const authors = [...new Set(catalog.map((b) => b.authorLabel))].sort(
+    (a, b) => {
+      const kana = (name: string) =>
+        catalog.find((b) => b.authorLabel === name)?.authors[0]?.kana || name;
+      return kana(a).localeCompare(kana(b), "ja");
+    },
+  );
+  const hasSearchConditions = Boolean(
+    query.trim() || author || filter !== "all",
+  );
+  const clearSearch = () => {
+    setQuery("");
+    setAuthor("");
+    setFilter("all");
+    searchRef.current?.focus({ preventScroll: true });
+  };
+  const visible = filterCatalog(catalog, query, sort).filter(
+    (b) =>
+      (!author || b.authorLabel === author) &&
+      (filter === "short"
+        ? b.characterCount < 30000
+        : filter === "long"
+          ? b.characterCount >= 30000
+          : filter === "recent"
+            ? recent.some((r) => r.bookId === b.id)
+            : true),
   );
   const openRead = (id: string) => {
     navigate(`/read/${id}`);
@@ -790,7 +949,6 @@ export default function App() {
                 onAbout={() => setAbout(true)}
                 onNotify={notify}
                 storageVersion={recordVersion}
-                index={catalog.indexOf(selected)}
               />
             </ReaderBoundary>
           ) : (
@@ -873,13 +1031,17 @@ export default function App() {
                   document
                     .getElementById("collection")
                     ?.scrollIntoView({ behavior: "smooth" });
+                  searchRef.current?.focus({ preventScroll: true });
                 }}
               >
-                本棚を眺める <ArrowDown size={16} />
+                作品を探す <Search size={16} />
               </a>
               <div className="hero-detail">
                 <span>
-                  <BookOpen size={15} /> {catalog.length || 20}作品の小さな文庫
+                  <BookOpen size={15} />
+                  {catalog.length
+                    ? `${catalog.length}作品の小さな文庫`
+                    : "青空文庫の小さな文庫"}
                 </span>
                 <span>
                   <Type size={15} /> 縦書き・横書き対応
@@ -960,34 +1122,75 @@ export default function App() {
               </div>
             </div>
             <div className="collection-tools">
-              <div className="filter-tabs" aria-label="作品の絞り込み">
-                {[
-                  ["all", "すべて"],
-                  ["short", "短編"],
-                  ["long", "長編"],
-                  ["recent", "最近読んだ本"],
-                ].map(([value, label]) => (
-                  <button
-                    key={value}
-                    className={filter === value ? "selected" : ""}
-                    aria-pressed={filter === value}
-                    onClick={() => setFilter(value)}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <div className="search-sort">
-                <label className="search-field">
-                  <Search size={17} />
+              <div
+                className="search-sort"
+                role="search"
+                aria-label="収録作品を検索"
+              >
+                <div className="search-field">
+                  <Search size={19} aria-hidden="true" />
                   <input
+                    ref={searchRef}
                     type="search"
                     aria-label="作品名・作家名で検索"
-                    placeholder="作品名・作家名で探す"
+                    aria-describedby="catalog-search-help"
+                    aria-controls="catalog-results"
+                    placeholder="作品名・作家名・読みで探す"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                   />
+                  {query && (
+                    <button
+                      type="button"
+                      aria-label="検索語を消す"
+                      onClick={() => {
+                        setQuery("");
+                        searchRef.current?.focus();
+                      }}
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
+                </div>
+                <label className="author-field">
+                  <span className="sr-only">作家で絞り込み</span>
+                  <select
+                    aria-label="作家で絞り込み"
+                    value={author}
+                    onChange={(e) => setAuthor(e.target.value)}
+                    aria-controls="catalog-results"
+                  >
+                    <option value="">すべての作家</option>
+                    {authors.map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown size={14} aria-hidden="true" />
                 </label>
+              </div>
+              <p className="search-help" id="catalog-search-help">
+                作品名・作家名・読みで検索できます。空白で区切ると、すべての言葉を含む作品を探せます。
+              </p>
+              <div className="collection-filters">
+                <div className="filter-tabs" aria-label="作品の絞り込み">
+                  {[
+                    ["all", "すべて"],
+                    ["short", "短編"],
+                    ["long", "長編"],
+                    ["recent", "最近読んだ本"],
+                  ].map(([value, label]) => (
+                    <button
+                      key={value}
+                      className={filter === value ? "selected" : ""}
+                      aria-pressed={filter === value}
+                      onClick={() => setFilter(value)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
                 <label className="sort-field">
                   <select
                     aria-label="並べ替え"
@@ -1003,95 +1206,108 @@ export default function App() {
                 </label>
               </div>
             </div>
-            {catalogError ? (
-              <div className="empty-state">
-                <Info />
-                <h3>本棚を読み込めませんでした</h3>
-                <button
-                  className="button"
-                  onClick={() => setRetry((v) => v + 1)}
+            {catalog.length > 0 && !catalogError && (
+              <div className="collection-summary">
+                <p
+                  className="collection-results"
+                  role="status"
+                  aria-live="polite"
+                  aria-atomic="true"
                 >
-                  再試行
-                </button>
-              </div>
-            ) : !catalog.length ? (
-              <div className="empty-state">
-                <LoaderCircle className="spin" />
-                <p>本棚を準備しています</p>
-              </div>
-            ) : !visible.length ? (
-              <div className="empty-state">
-                <Search />
-                <h3>
-                  {filter === "recent" && !query
-                    ? "読書の記録はこれから。"
-                    : "お探しの作品が見つかりませんでした"}
-                </h3>
-                <p>
-                  {filter === "recent"
-                    ? "気になる一冊を開いてみてください。"
-                    : "作品名や作家名を変えてお試しください。"}
+                  {visible.length} / {catalog.length}作品
                 </p>
-                <button
-                  className="button"
-                  onClick={() => {
-                    setQuery("");
-                    setFilter("all");
-                  }}
-                >
-                  すべての作品を見る
-                </button>
-              </div>
-            ) : (
-              <div className="book-grid">
-                {visible.map((b) => {
-                  const index = catalog.indexOf(b);
-                  const record = readerStorage.getRecord(b.id);
-                  return (
-                    <article className="book-card" key={b.id}>
-                      <button
-                        className="book-cover-button"
-                        onClick={() => openRead(b.id)}
-                        aria-label={`${b.title}を読む`}
-                      >
-                        <BookCover book={b} index={index} />
-                        <span className="cover-open">
-                          <BookOpen size={17} />
-                          読む
-                        </span>
-                      </button>
-                      <div className="book-card-copy">
-                        <div className="card-category">
-                          <span>
-                            {b.characterCount >= 30000 ? "長編" : "短編"}
-                          </span>
-                          <span>
-                            <Clock3 size={12} />
-                            {formatMinutes(b.characterCount)}
-                          </span>
-                        </div>
-                        <h3>
-                          <a href={`#/read/${b.id}`}>{b.title}</a>
-                        </h3>
-                        <p>{b.authorLabel}</p>
-                        {record && (
-                          <button
-                            className="card-resume"
-                            onClick={() => openRead(b.id)}
-                          >
-                            <span>続きから</span>
-                            <span>
-                              {Math.round(record.progress * 100)}%{" "}
-                              <ArrowRight size={13} />
-                            </span>
-                          </button>
-                        )}
-                      </div>
-                    </article>
-                  );
-                })}
+                {hasSearchConditions && (
+                  <button className="text-link" onClick={clearSearch}>
+                    <X size={14} /> 検索条件をクリア
+                  </button>
+                )}
               </div>
             )}
+            <div id="catalog-results">
+              {catalogError ? (
+                <div className="empty-state">
+                  <Info />
+                  <h3>本棚を読み込めませんでした</h3>
+                  <button
+                    className="button"
+                    onClick={() => setRetry((v) => v + 1)}
+                  >
+                    再試行
+                  </button>
+                </div>
+              ) : !catalog.length ? (
+                <div className="empty-state">
+                  <LoaderCircle className="spin" />
+                  <p>本棚を準備しています</p>
+                </div>
+              ) : !visible.length ? (
+                <div className="empty-state">
+                  <Search />
+                  <h3>
+                    {filter === "recent" && !query.trim() && !author
+                      ? "読書の記録はこれから。"
+                      : "お探しの作品が見つかりませんでした"}
+                  </h3>
+                  <p>
+                    {filter === "recent" && !query.trim() && !author
+                      ? "気になる一冊を開いてみてください。"
+                      : "検索語や作家、短編・長編の条件を変えてお試しください。"}
+                  </p>
+                  <button className="button" onClick={clearSearch}>
+                    すべての作品を見る
+                  </button>
+                </div>
+              ) : (
+                <div className="book-grid">
+                  {visible.map((b) => {
+                    const index = catalog.indexOf(b);
+                    const record = readerStorage.getRecord(b.id);
+                    return (
+                      <article className="book-card" key={b.id}>
+                        <button
+                          className="book-cover-button"
+                          onClick={() => openRead(b.id)}
+                          aria-label={`${b.title}を読む`}
+                        >
+                          <BookCover book={b} index={index} />
+                          <span className="cover-open">
+                            <BookOpen size={17} />
+                            読む
+                          </span>
+                        </button>
+                        <div className="book-card-copy">
+                          <div className="card-category">
+                            <span>
+                              {b.characterCount >= 30000 ? "長編" : "短編"}
+                            </span>
+                            <span>
+                              <Clock3 size={12} />
+                              {formatMinutes(b.characterCount)}
+                            </span>
+                          </div>
+                          <h3>
+                            <a href={`#/read/${b.id}`}>{b.title}</a>
+                          </h3>
+                          <p>{b.authorLabel}</p>
+                          {record && (
+                            <button
+                              className="card-resume"
+                              onClick={() => openRead(b.id)}
+                            >
+                              <span>続きから</span>
+                              <span>
+                                {Math.round(record.progress * 100)}%{" "}
+                                <ArrowRight size={13} />
+                              </span>
+                            </button>
+                          )}
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
             <p className="collection-footnote">
               作品本文は青空文庫に基づきます。読書時間は1分500文字での目安です。
             </p>
@@ -1126,7 +1342,13 @@ export default function App() {
           </button>
         </footer>
       )}
-      {about && <About onClose={() => setAbout(false)} onClear={clear} />}
+      {about && (
+        <About
+          onClose={() => setAbout(false)}
+          onClear={clear}
+          bookCount={catalog.length}
+        />
+      )}
       {saveWarning && (
         <div className="save-warning" role="status">
           <Info size={16} />
@@ -1154,7 +1376,6 @@ function ReadingView({
   onAbout,
   onNotify,
   storageVersion,
-  index,
 }: {
   book: Book;
   settings: ReaderSettings;
@@ -1163,7 +1384,6 @@ function ReadingView({
   onAbout: () => void;
   onNotify: (s: string) => void;
   storageVersion: number;
-  index: number;
 }) {
   const initial = useRef<{ anchor: Anchor; adjusted: boolean } | null>(null);
   if (!initial.current) {
@@ -1519,6 +1739,38 @@ function ReadingView({
               横
             </button>
           </div>
+          <ReaderThemeToggle settings={settings} onChange={onSettings} />
+          <div className="reader-bookmark-controls">
+            <button
+              className={`bookmark-add ${hasBookmark ? "marked" : ""}`}
+              aria-label="このページにしおりを挟む"
+              aria-description={
+                hasBookmark ? "このページにはしおりがあります" : undefined
+              }
+              title={
+                hasBookmark
+                  ? "このページにはしおりがあります"
+                  : "このページにしおりを挟む"
+              }
+              onClick={addBookmark}
+              disabled={!page || loading}
+            >
+              <BookmarkIcon
+                size={19}
+                fill={hasBookmark ? "currentColor" : "none"}
+                aria-hidden="true"
+              />
+              <span>しおり</span>
+            </button>
+            <button
+              className="bookmark-list-toggle"
+              aria-label="しおり一覧を開く"
+              title="しおり一覧を開く"
+              onClick={() => setPanel("bookmarks")}
+            >
+              <ChevronDown size={14} aria-hidden="true" />
+            </button>
+          </div>
           <button
             className="reader-info-toggle"
             aria-label={infoOpen ? "作品情報を閉じる" : "作品情報を開く"}
@@ -1551,17 +1803,6 @@ function ReadingView({
                 setInfoOpen(false);
               }}
             />
-          </div>
-          <div className="reader-running-head">
-            <span>
-              {vertical ? "縦書き" : "横書き"} /{" "}
-              {
-                japaneseFontOptions.find(
-                  ([value]) => value === settings.font,
-                )?.[1]
-              }
-            </span>
-            <span>AOZORA COLLECTION {String(index + 1).padStart(2, "0")}</span>
           </div>
           <div
             className="reader-viewport"
@@ -1711,25 +1952,15 @@ function ReadingView({
               <List size={19} />
               <span>目次</span>
             </button>
-            <button
-              aria-label="しおり一覧を開く"
-              onClick={() => setPanel("bookmarks")}
-            >
-              <BookmarkIcon size={19} />
-              <span>しおり</span>
-            </button>
-            <button
-              aria-label={settingsOpen ? "読書設定を閉じる" : "読書設定を開く"}
-              aria-expanded={settingsOpen}
-              aria-controls="reader-settings-panel"
-              onClick={() => {
-                if (!settingsOpen) setInfoOpen(false);
-                setSettingsOpen((open) => !open);
+            <ReaderQuickControls
+              settings={settings}
+              onChange={onSettings}
+              onOpen={() => {
+                setPanel(null);
+                setSettingsOpen(false);
+                setInfoOpen(false);
               }}
-            >
-              <Settings2 size={19} />
-              <span>設定</span>
-            </button>
+            />
           </div>
           <div className="page-controls">
             {vertical ? next : previous}
@@ -1737,16 +1968,17 @@ function ReadingView({
             {vertical ? previous : next}
           </div>
           <button
-            className={`bookmark-add ${hasBookmark ? "marked" : ""}`}
-            aria-label="このページにしおりを挟む"
-            onClick={addBookmark}
-            disabled={!page || loading}
+            className="toolbar-settings"
+            aria-label={settingsOpen ? "読書設定を閉じる" : "読書設定を開く"}
+            aria-expanded={settingsOpen}
+            aria-controls="reader-settings-panel"
+            onClick={() => {
+              if (!settingsOpen) setInfoOpen(false);
+              setSettingsOpen((open) => !open);
+            }}
           >
-            <BookmarkIcon
-              size={19}
-              fill={hasBookmark ? "currentColor" : "none"}
-            />
-            <span>{hasBookmark ? "しおり済み" : "しおりを挟む"}</span>
+            <Settings2 size={19} aria-hidden="true" />
+            <span>設定</span>
           </button>
         </div>
       </footer>
@@ -1828,7 +2060,7 @@ function ReadingView({
               <div className="empty-state">
                 <BookmarkIcon />
                 <h3>気になる言葉に、しおりを。</h3>
-                <p>「しおりを挟む」で、あとからこのページに戻れます。</p>
+                <p>上の「しおり」で、あとからこのページに戻れます。</p>
               </div>
             )}
           </div>

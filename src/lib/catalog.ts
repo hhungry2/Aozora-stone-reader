@@ -9,18 +9,21 @@ export function normalizeSearch(text: string): string {
 
 export type CatalogSort = 'title' | 'author';
 const collator = new Intl.Collator('ja', { sensitivity: 'base', numeric: true });
+const compactSearch = (text: string) => normalizeSearch(text).replace(/ /g, '');
 
 export function filterCatalog(catalog: readonly CatalogEntry[], query: string, sort: CatalogSort = 'title'): CatalogEntry[] {
   const words = normalizeSearch(query).split(' ').filter(Boolean);
   const filtered = catalog.filter((entry) => {
-    const text = normalizeSearch([entry.title, entry.titleKana, entry.subtitle, entry.authorLabel,
-      ...entry.authors.flatMap((person) => [person.name, person.kana])].join(' '));
-    return words.every((word) => text.includes(word));
+    // Remove spacing inside each field so a person's full name works with or without spaces.
+    // Keep fields separate: a query must never match across a title/author boundary.
+    const fields = [entry.title, entry.titleKana, entry.subtitle, entry.authorLabel,
+      ...entry.authors.flatMap((person) => [person.name, person.kana])].map(compactSearch);
+    return words.every((word) => fields.some((field) => field.includes(word)));
   });
   const title = (entry: CatalogEntry) => normalizeSearch(entry.titleKana || entry.title);
-  const author = (entry: CatalogEntry) => normalizeSearch(entry.authors[0]?.kana || entry.authorLabel);
+  const author = (entry: CatalogEntry) => compactSearch(entry.authors[0]?.kana || entry.authorLabel);
   return filtered.sort((a, b) => {
-    const comparison = sort === 'author' ? collator.compare(author(a), author(b)) : collator.compare(title(a), title(b));
-    return comparison || a.id.localeCompare(b.id, 'en', { numeric: true });
+    const authorComparison = sort === 'author' ? collator.compare(author(a), author(b)) : 0;
+    return authorComparison || collator.compare(title(a), title(b)) || a.id.localeCompare(b.id, 'en', { numeric: true });
   });
 }

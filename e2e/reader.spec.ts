@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import catalog from "../public/data/catalog.json" with { type: "json" };
 
 test("work information precedes the first passage and preserves the saved reading position", async ({
   page,
@@ -113,7 +114,7 @@ test("browser history and clearing saved data keep reading usable", async ({
   await expect(rendered).not.toHaveAttribute("data-start", "0");
   const saved = await rendered.getAttribute("data-start");
   await page.getByRole("link", { name: "本棚へ", exact: true }).click();
-  await expect(page.locator(".book-card")).toHaveCount(20);
+  await expect(page.locator(".book-card")).toHaveCount(catalog.length);
   await page.goBack();
   await expect(rendered).toHaveAttribute("data-start", saved!);
   await page
@@ -184,7 +185,7 @@ test("catalog, vertical/horizontal reading, position restoration, bookmarks and 
   const failures: string[] = [];
   page.on("pageerror", (error) => failures.push(error.message));
   await page.goto("/");
-  await expect(page.locator(".book-card")).toHaveCount(20);
+  await expect(page.locator(".book-card")).toHaveCount(catalog.length);
   await page.getByRole("searchbox").fill("らしょうもん");
   await expect(page.locator(".book-card")).toHaveCount(1);
   await page.locator(".book-card h3 a").click();
@@ -216,9 +217,12 @@ test("catalog, vertical/horizontal reading, position restoration, bookmarks and 
   );
   await expect(rendered).toHaveAttribute("data-block", savedBlock!);
   await expect(rendered).toHaveAttribute("data-offset", savedOffset!);
-  await page.getByRole("button", { name: "読書設定を開く" }).click();
-  await page.getByLabel("フォントサイズ").fill("28");
-  await page.getByRole("button", { name: "暗色", exact: true }).click();
+  await page
+    .getByRole("button", { name: "フォントサイズを調整", exact: true })
+    .click();
+  await page.getByLabel("フォントサイズ", { exact: true }).fill("28");
+  await page.getByRole("button", { name: "調整を閉じる", exact: true }).click();
+  await page.getByRole("button", { name: /^配色を切り替え/u }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await expect(rendered).toHaveAttribute("data-block", savedBlock!);
   await expect(rendered).toHaveAttribute("data-offset", savedOffset!);
@@ -264,7 +268,7 @@ test("long book, contents, missing route and denied storage remain usable", asyn
     page.getByRole("heading", { name: "この作品は本棚にありません" }),
   ).toBeVisible();
   await page.getByRole("link", { name: "本棚に戻る", exact: true }).click();
-  await expect(page.locator(".book-card")).toHaveCount(20);
+  await expect(page.locator(".book-card")).toHaveCount(catalog.length);
 });
 
 test("screen layout keeps body text and ruby inside narrow and wide viewports", async ({
@@ -281,7 +285,7 @@ test("screen layout keeps body text and ruby inside narrow and wide viewports", 
     });
     const page = await context.newPage();
     await page.goto("/");
-    await expect(page.locator(".book-card")).toHaveCount(20);
+    await expect(page.locator(".book-card")).toHaveCount(catalog.length);
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth),
     ).toBeLessThanOrEqual(size.width);

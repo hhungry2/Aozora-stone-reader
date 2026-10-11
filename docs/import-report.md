@@ -1,11 +1,15 @@
 # 作品取り込み・検証記録
 
-初期本棚は20作品。公式の書誌CSVで作品と関係人物の著作権フラグがすべて「なし」の版だけを収録した。新字新仮名を優先し、該当版のない『富嶽百景』は新字旧仮名を採用した。
+収録作品は40作品、16名。公式の書誌CSVで作品と関係人物の著作権フラグがすべて「なし」の版だけを収録した。新字新仮名を優先し、『富嶽百景』（新字旧仮名）・『芋粥』（新字旧仮名）・『たけくらべ』（新字旧仮名）は新字新仮名の公開版がないため、記載の表記を採用した。
+
+童話・短編・中編を中心に選定し、新美南吉、小川未明、江戸川乱歩、森鴎外、樋口一葉、泉鏡花、坂口安吾、夢野久作、有島武郎、菊池寛の作品も収録した。長い作品として『こころ』『人間失格』を含む。追加作品の公式図書カードで題名・著者・文字遣い・XHTML版の対応を確認し、作品IDを固定した。
 
 - 公式CSV: https://www.aozora.gr.jp/index_pages/list_person_all_extended_utf8.zip
-- 取得: 2026-10-09T13:03:56+00:00
+- 取得: 2026-10-11T05:03:59+00:00
 - CSV ZIP SHA-256: `a615fa6ddb6ef3e0ad598337f5d08f1570c3d2aa51cc5d43a62998ca904905be`
 - 変換器: `aozora-xhtml-1.1.0`
+- 収録: 40作品・16名・本文合計1,062,485文字
+- ルビ: 27,339箇所／外字Unicode化: 152箇所／同梱画像: 0箇所
 
 作品本文は原XHTMLを厳密にShift_JISデコードし、ルビの読みと括弧を除いた本文を抽出した。下記のJIS面区点による外字変換を適用した独立本文抽出結果と、JSON全ブロックを連結した結果のSHA-256・文字数が一致することを検証している。Unicodeへ変換した位置をU+FFFCに戻し、変換前の原文指紋に一致することも検証した。各ルビの親文字と読みの組を原文から独立抽出して照合し、ルビ数・原画像数（同梱画像＋Unicode変換数）の一致、UTF-16の範囲とサロゲート境界、画像の同梱、目次リンク、文字化け置換文字の不在も自動検査した。校訂注記は本文中に保持する。
 
@@ -31,6 +35,26 @@
 | 000752 | [坊っちゃん](https://www.aozora.gr.jp/cards/000148/card752.html) | 夏目漱石 | 88,491 | 3,042 | 0 | 11 | 新字新仮名 |
 | 000424 | [檸檬](https://www.aozora.gr.jp/cards/000074/card424.html) | 梶井基次郎 | 4,959 | 95 | 0 | 0 | 新字新仮名 |
 | 000624 | [山月記](https://www.aozora.gr.jp/cards/000119/card624.html) | 中島敦 | 5,820 | 242 | 0 | 0 | 新字新仮名 |
+| 000773 | [こころ](https://www.aozora.gr.jp/cards/000148/card773.html) | 夏目漱石 | 160,994 | 4,567 | 0 | 113 | 新字新仮名 |
+| 000301 | [人間失格](https://www.aozora.gr.jp/cards/000035/card301.html) | 太宰治 | 73,034 | 391 | 0 | 7 | 新字新仮名 |
+| 000753 | [文鳥](https://www.aozora.gr.jp/cards/000148/card753.html) | 夏目漱石 | 10,569 | 444 | 0 | 0 | 新字新仮名 |
+| 043017 | [蜜柑](https://www.aozora.gr.jp/cards/000879/card43017.html) | 芥川竜之介 | 3,159 | 117 | 0 | 0 | 新字新仮名 |
+| 000055 | [芋粥](https://www.aozora.gr.jp/cards/000879/card55.html) | 芥川竜之介 | 14,590 | 319 | 0 | 0 | 新字旧仮名 |
+| 000621 | [名人伝](https://www.aozora.gr.jp/cards/000119/card621.html) | 中島敦 | 5,745 | 342 | 0 | 0 | 新字新仮名 |
+| 001737 | [李陵](https://www.aozora.gr.jp/cards/000119/card1737.html) | 中島敦 | 34,098 | 1,590 | 0 | 3 | 新字新仮名 |
+| 000427 | [桜の樹の下には](https://www.aozora.gr.jp/cards/000074/card427.html) | 梶井基次郎 | 1,746 | 29 | 0 | 0 | 新字新仮名 |
+| 000628 | [ごん狐](https://www.aozora.gr.jp/cards/000121/card628.html) | 新美南吉 | 4,842 | 69 | 0 | 6 | 新字新仮名 |
+| 000637 | [手袋を買いに](https://www.aozora.gr.jp/cards/000121/card637.html) | 新美南吉 | 3,519 | 64 | 0 | 0 | 新字新仮名 |
+| 054372 | [赤い蝋燭と人魚](https://www.aozora.gr.jp/cards/001475/card54372.html) | 小川未明 | 6,570 | 64 | 0 | 5 | 新字新仮名 |
+| 056648 | [人間椅子](https://www.aozora.gr.jp/cards/001779/card56648.html) | 江戸川乱歩 | 14,943 | 239 | 0 | 0 | 新字新仮名 |
+| 056645 | [押絵と旅する男](https://www.aozora.gr.jp/cards/001779/card56645.html) | 江戸川乱歩 | 17,416 | 290 | 0 | 0 | 新字新仮名 |
+| 045245 | [高瀬舟](https://www.aozora.gr.jp/cards/000129/card45245.html) | 森鴎外 | 8,781 | 123 | 0 | 0 | 新字新仮名 |
+| 056041 | [たけくらべ](https://www.aozora.gr.jp/cards/000064/card56041.html) | 樋口一葉 | 28,664 | 1,438 | 0 | 16 | 新字旧仮名 |
+| 000360 | [外科室](https://www.aozora.gr.jp/cards/000050/card360.html) | 泉鏡花 | 7,322 | 258 | 0 | 2 | 新字新仮名 |
+| 042618 | [桜の森の満開の下](https://www.aozora.gr.jp/cards/001095/card42618.html) | 坂口安吾 | 16,736 | 75 | 0 | 0 | 新字新仮名 |
+| 002381 | [瓶詰地獄](https://www.aozora.gr.jp/cards/000096/card2381.html) | 夢野久作 | 6,825 | 202 | 0 | 3 | 新字新仮名 |
+| 000211 | [一房の葡萄](https://www.aozora.gr.jp/cards/000025/card211.html) | 有島武郎 | 6,338 | 150 | 0 | 3 | 新字新仮名 |
+| 000496 | [恩讐の彼方に](https://www.aozora.gr.jp/cards/000083/card496.html) | 菊池寛 | 22,820 | 207 | 0 | 0 | 新字新仮名 |
 
 ## JIS面区点からUnicodeへの自動変換
 
@@ -75,6 +99,50 @@
 | 山月記 | [2-1-79](https://www.aozora.gr.jp/gaiji/2-01/2-01-79.png) | 傪 (U+50AA) | 18 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
 | 山月記 | [1-92-44](https://www.aozora.gr.jp/gaiji/1-92/1-92-44.png) | 軺 (U+8EFA) | 1 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
 | 山月記 | [2-4-33](https://www.aozora.gr.jp/gaiji/2-04/2-04-33.png) | 嘷 (U+5637) | 1 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| こころ | [1-84-77](https://www.aozora.gr.jp/gaiji/1-84/1-84-77.png) | 挘 (U+6318) | 1 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| こころ | [1-87-64](https://www.aozora.gr.jp/gaiji/1-87/1-87-64.png) | 燄 (U+71C4) | 1 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| こころ | [1-84-59](https://www.aozora.gr.jp/gaiji/1-84/1-84-59.png) | 愷 (U+6137) | 1 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| こころ | [1-88-85](https://www.aozora.gr.jp/gaiji/1-88/1-88-85.png) | 睜 (U+775C) | 1 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| 芋粥 | [1-87-56](https://www.aozora.gr.jp/gaiji/1-87/1-87-56.png) | 煠 (U+7160) | 1 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| 芋粥 | [1-88-69](https://www.aozora.gr.jp/gaiji/1-88/1-88-69.png) | 皪 (U+76AA) | 1 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| 芋粥 | [1-89-79](https://www.aozora.gr.jp/gaiji/1-89/1-89-79.png) | 籙 (U+7C59) | 1 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| 芋粥 | [1-87-6](https://www.aozora.gr.jp/gaiji/1-87/1-87-06.png) | 漪 (U+6F2A) | 1 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| 名人伝 | [1-93-66](https://www.aozora.gr.jp/gaiji/1-93/1-93-66.png) | 雞 (U+96DE) | 1 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| 名人伝 | [1-89-75](https://www.aozora.gr.jp/gaiji/1-89/1-89-75.png) | 簳 (U+7C33) | 1 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| 名人伝 | [1-90-9](https://www.aozora.gr.jp/gaiji/1-90/1-90-09.png) | 綦 (U+7DA6) | 1 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| 名人伝 | [1-14-45](https://www.aozora.gr.jp/gaiji/1-14/1-14-45.png) | 儞 (U+511E) | 2 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| 名人伝 | [1-90-29](https://www.aozora.gr.jp/gaiji/1-90/1-90-29.png) | 羿 (U+7FBF) | 1 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| 李陵 | [1-92-79](https://www.aozora.gr.jp/gaiji/1-92/1-92-79.png) | 鄣 (U+9123) | 3 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| 李陵 | [1-89-6](https://www.aozora.gr.jp/gaiji/1-89/1-89-06.png) | 确 (U+786E) | 1 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| 李陵 | [1-86-19](https://www.aozora.gr.jp/gaiji/1-86/1-86-19.png) | 檉 (U+6A89) | 1 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| 李陵 | [2-78-51](https://www.aozora.gr.jp/gaiji/2-78/2-78-51.png) | 浞 (U+6D5E) | 3 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| 李陵 | [1-92-64](https://www.aozora.gr.jp/gaiji/1-92/1-92-64.png) | 邳 (U+90B3) | 1 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| 李陵 | [1-92-67](https://www.aozora.gr.jp/gaiji/1-92/1-92-67.png) | 郅 (U+90C5) | 2 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| 李陵 | [1-90-24](https://www.aozora.gr.jp/gaiji/1-90/1-90-24.png) | 纍 (U+7E8D) | 1 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| 李陵 | [1-93-79](https://www.aozora.gr.jp/gaiji/1-93/1-93-79.png) | 鞮 (U+97AE) | 7 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| 李陵 | [1-14-65](https://www.aozora.gr.jp/gaiji/1-14/1-14-65.png) | 劓 (U+5293) | 1 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| 李陵 | [2-3-25](https://www.aozora.gr.jp/gaiji/2-03/2-03-25.png) | 剕 (U+5255) | 1 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| 李陵 | [1-93-53](https://www.aozora.gr.jp/gaiji/1-93/1-93-53.png) | 闋 (U+95CB) | 1 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| 李陵 | [1-15-25](https://www.aozora.gr.jp/gaiji/1-15/1-15-25.png) | 噲 (U+5672) | 1 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| 李陵 | [1-14-90](https://www.aozora.gr.jp/gaiji/1-14/1-14-90.png) | 呴 (U+5474) | 1 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| 李陵 | [1-94-62](https://www.aozora.gr.jp/gaiji/1-94/1-94-62.png) | 鵰 (U+9D70) | 1 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| 李陵 | [1-15-17](https://www.aozora.gr.jp/gaiji/1-15/1-15-17.png) | 嘎 (U+560E) | 1 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| 李陵 | [1-85-42](https://www.aozora.gr.jp/gaiji/1-85/1-85-42.png) | 曛 (U+66DB) | 1 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| 李陵 | [2-78-8](https://www.aozora.gr.jp/gaiji/2-78/2-78-08.png) | 毉 (U+6BC9) | 1 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| 李陵 | [1-87-59](https://www.aozora.gr.jp/gaiji/1-87/1-87-59.png) | 熅 (U+7185) | 1 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| 李陵 | [1-93-63](https://www.aozora.gr.jp/gaiji/1-93/1-93-63.png) | 隤 (U+96A4) | 1 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| 人間椅子 | [1-94-21](https://www.aozora.gr.jp/gaiji/1-94/1-94-21.png) | 骶 (U+9AB6) | 1 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| たけくらべ | [2-81-42](https://www.aozora.gr.jp/gaiji/2-81/2-81-42.png) | 疷 (U+75B7) | 1 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| たけくらべ | [1-87-36](https://www.aozora.gr.jp/gaiji/1-87/1-87-36.png) | 灵 (U+7075) | 1 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| たけくらべ | [1-94-27](https://www.aozora.gr.jp/gaiji/1-94/1-94-27.png) | 鬂 (U+9B02) | 1 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| たけくらべ | [1-14-94](https://www.aozora.gr.jp/gaiji/1-14/1-14-94.png) | 咡 (U+54A1) | 1 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| 外科室 | [1-88-85](https://www.aozora.gr.jp/gaiji/1-88/1-88-85.png) | 睜 (U+775C) | 3 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| 瓶詰地獄 | [2-83-54](https://www.aozora.gr.jp/gaiji/2-83/2-83-54.png) | 箛 (U+7B9B) | 1 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| 瓶詰地獄 | [2-3-19](https://www.aozora.gr.jp/gaiji/2-03/2-03-19.png) | 凳 (U+51F3) | 4 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| 瓶詰地獄 | [1-84-77](https://www.aozora.gr.jp/gaiji/1-84/1-84-77.png) | 挘 (U+6318) | 2 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| 瓶詰地獄 | [1-14-94](https://www.aozora.gr.jp/gaiji/1-14/1-14-94.png) | 咡 (U+54A1) | 1 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| 一房の葡萄 | [2-88-74](https://www.aozora.gr.jp/gaiji/2-88/2-88-74.png) | 譃 (U+8B43) | 1 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
+| 恩讐の彼方に | [1-88-16](https://www.aozora.gr.jp/gaiji/1-88/1-88-16.png) | 瑇 (U+7447) | 3 | [Python標準JIS X 0213:2004対応](https://docs.python.org/3/library/codecs.html#standard-encodings) |
 
 対応表の参照先は [Project X0213のEUC-JIS-2004対Unicode表](https://x0213.org/codetable/euc-jis-2004-std.txt)。取り込み時はネットワーク上の表に依存せず、Python標準コーデックと上記の割当区ガードで変換する。
 
@@ -103,6 +171,14 @@ python scripts/import_books.py --validate-only
 - 銀河鉄道の夜: 青空文庫の校訂注記を本文中にそのまま保持
 - 吾輩は猫である: sub の文字は保持し、上下位置のみ簡略化／レイアウト chitsuki_2 は本文と段落を保持し、配置のみ簡略化／レイアウト chitsuki_5 は本文と段落を保持し、配置のみ簡略化／青空文庫の校訂注記を本文中にそのまま保持
 - 坊っちゃん: レイアウト chitsuki_1 は本文と段落を保持し、配置のみ簡略化
+- こころ: 青空文庫の校訂注記を本文中にそのまま保持
+- 人間失格: 青空文庫の校訂注記を本文中にそのまま保持
+- 芋粥: レイアウト chitsuki_2 は本文と段落を保持し、配置のみ簡略化
+- 名人伝: レイアウト chitsuki_1 は本文と段落を保持し、配置のみ簡略化
+- 李陵: 青空文庫の校訂注記を本文中にそのまま保持
+- 人間椅子: 青空文庫の校訂注記を本文中にそのまま保持
+- 瓶詰地獄: レイアウト chitsuki_0 は本文と段落を保持し、配置のみ簡略化／レイアウト chitsuki_2 は本文と段落を保持し、配置のみ簡略化／青空文庫の校訂注記を本文中にそのまま保持
+- 恩讐の彼方に: 青空文庫の校訂注記を本文中にそのまま保持
 
 字下げはブロック属性に保持し、変換できない外字は原画像を同梱して本文のU+FFFC位置に対応づけた。配置簡略化の警告は本文の省略を意味しない。連続する空行による版面上の間隔は段落境界へ統合した。今後の再取り込みで曖昧なルビ構造・デコード失敗・著作権フラグ不一致・本文欠落を検出した場合、公開JSON更新を中止する。
 

@@ -1,10 +1,11 @@
 import { expect, test } from "@playwright/test";
+import catalog from "../public/data/catalog.json" with { type: "json" };
 
 test("the updated site name fits the library and the removed headings stay absent", async ({
   page,
 }) => {
   await page.goto("/");
-  await expect(page.locator(".book-card")).toHaveCount(20);
+  await expect(page.locator(".book-card")).toHaveCount(catalog.length);
   await expect(page.locator(".site-header .brand strong")).toHaveText(
     "縦・横表示対応の青空文庫リーダー",
   );
@@ -43,6 +44,14 @@ test("all playground typography settings reflow at the same anchor and persist",
   await page
     .getByRole("button", { name: "このページにしおりを挟む", exact: true })
     .click();
+  await page
+    .getByRole("button", { name: "フォントサイズを調整", exact: true })
+    .click();
+  await page.getByLabel("フォントサイズ", { exact: true }).fill("21");
+  await page.getByRole("button", { name: "行送りを調整", exact: true }).click();
+  await page.getByLabel("行送り", { exact: true }).fill("1.8");
+  await page.getByRole("button", { name: "調整を閉じる", exact: true }).click();
+  await page.getByRole("button", { name: /^配色を切り替え/u }).click();
   const settingsPanel = page.getByRole("complementary", { name: "読書の設定" });
   await page
     .getByRole("button", { name: "読書設定を開く", exact: true })
@@ -67,8 +76,6 @@ test("all playground typography settings reflow at the same anchor and persist",
   await settingsPanel
     .getByLabel("行の寄せ", { exact: true })
     .selectOption("end");
-  await settingsPanel.getByLabel("フォントサイズ", { exact: true }).fill("21");
-  await settingsPanel.getByLabel("行送り", { exact: true }).fill("1.8");
   await settingsPanel
     .getByLabel("和文フォント", { exact: true })
     .selectOption("noto-sans");
@@ -79,9 +86,6 @@ test("all playground typography settings reflow at the same anchor and persist",
   for (const label of ["禁則処理", "単語で改行（単語を分割しない）", "縦中横"])
     await settingsPanel.getByLabel(label, { exact: true }).uncheck();
   await settingsPanel.getByLabel("文字の枠を表示", { exact: true }).check();
-  await settingsPanel
-    .getByRole("button", { name: "暗色", exact: true })
-    .click();
   await expect(page.locator(".reader-loading")).toHaveCount(0);
   await expect(rendered).toHaveAttribute("data-block", savedBlock!);
   await expect(rendered).toHaveAttribute("data-offset", savedOffset!);
@@ -102,6 +106,15 @@ test("all playground typography settings reflow at the same anchor and persist",
   await expect(rendered).toHaveAttribute("data-offset", savedOffset!);
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page
+    .getByRole("button", { name: "フォントサイズを調整", exact: true })
+    .click();
+  await expect(page.getByLabel("フォントサイズ", { exact: true })).toHaveValue(
+    "21",
+  );
+  await page.getByRole("button", { name: "行送りを調整", exact: true }).click();
+  await expect(page.getByLabel("行送り", { exact: true })).toHaveValue("1.8");
+  await page.getByRole("button", { name: "調整を閉じる", exact: true }).click();
+  await page
     .getByRole("button", { name: "しおり一覧を開く", exact: true })
     .click();
   await expect(page.locator(".bookmark-item")).toHaveCount(1);
@@ -114,8 +127,6 @@ test("all playground typography settings reflow at the same anchor and persist",
     ["約物", "whole"],
     ["文字寄せ", "center"],
     ["行の寄せ", "end"],
-    ["フォントサイズ", "21"],
-    ["行送り", "1.8"],
     ["和文フォント", "noto-sans"],
     ["欧文フォント", "times"],
     ["欧文スケール", "0.83"],
@@ -137,9 +148,6 @@ test("all playground typography settings reflow at the same anchor and persist",
     settingsPanel.getByLabel("文字方向", { exact: true }),
   ).toHaveValue("tbRl");
   await expect(
-    settingsPanel.getByLabel("フォントサイズ", { exact: true }),
-  ).toHaveValue("20");
-  await expect(
     settingsPanel.getByLabel("禁則処理", { exact: true }),
   ).toBeChecked();
   await expect(
@@ -149,6 +157,13 @@ test("all playground typography settings reflow at the same anchor and persist",
   await expect(rendered.locator(".reader-glyph-frames")).toHaveCount(0);
   await expect(rendered).toHaveAttribute("data-block", savedBlock!);
   await expect(rendered).toHaveAttribute("data-offset", savedOffset!);
+  await page
+    .getByRole("button", { name: "フォントサイズを調整", exact: true })
+    .click();
+  await expect(page.getByLabel("フォントサイズ", { exact: true })).toHaveValue(
+    "20",
+  );
+  await page.getByRole("button", { name: "調整を閉じる", exact: true }).click();
 });
 
 test("toggling settings resizes the text area and keeps the passage and settings", async ({
@@ -179,7 +194,7 @@ test("toggling settings resizes the text area and keeps the passage and settings
       openBounds!.width < closedBounds!.width ||
         openBounds!.height < closedBounds!.height,
     ).toBe(true);
-    await panel.getByLabel("フォントサイズ", { exact: true }).fill("24");
+    await panel.getByLabel("欧文スケール", { exact: true }).fill("0.83");
     await expect(page.locator(".reader-loading")).toHaveCount(0);
     await expect(rendered).toHaveAttribute("data-block", block!);
     await expect(rendered).toHaveAttribute("data-offset", offset!);
@@ -192,7 +207,7 @@ test("toggling settings resizes the text area and keeps the passage and settings
     await expect(rendered).toHaveAttribute("data-offset", offset!);
   }
   await toggle.click();
-  await expect(panel.getByLabel("フォントサイズ", { exact: true })).toHaveValue(
-    "24",
+  await expect(panel.getByLabel("欧文スケール", { exact: true })).toHaveValue(
+    "0.83",
   );
 });

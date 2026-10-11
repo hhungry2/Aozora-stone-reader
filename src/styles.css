@@ -673,11 +673,12 @@ button {
   padding-bottom: 6px;
 }
 .collection-tools {
+  border-bottom: 1px solid var(--line);
+}
+.collection-filters {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid var(--line);
-  margin-bottom: 32px;
   gap: 15px;
 }
 .filter-tabs {
@@ -700,8 +701,7 @@ button {
 .search-sort {
   display: flex;
   align-items: center;
-  gap: 18px;
-  padding-bottom: 12px;
+  gap: 14px;
 }
 .search-field {
   display: flex;
@@ -710,17 +710,91 @@ button {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 3px;
-  padding: 10px 12px;
+  padding: 6px 14px;
   color: var(--muted);
-  max-width: 235px;
+  min-width: 0;
+  flex: 1;
+  min-height: 48px;
+}
+.search-field > svg {
+  flex-shrink: 0;
+}
+.search-field:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
 }
 .search-field input {
   border: 0;
   outline: 0;
   background: transparent;
-  font-size: 11px;
+  font-size: 14px;
   min-width: 0;
-  width: 170px;
+  width: 100%;
+  min-height: 34px;
+}
+.search-field input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+}
+.search-field button {
+  display: grid;
+  place-items: center;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0;
+  color: var(--muted);
+  border-radius: 3px;
+}
+.search-field button:hover {
+  color: var(--text);
+  background: var(--soft);
+}
+.author-field {
+  display: flex;
+  align-items: center;
+  position: relative;
+  width: 200px;
+  min-width: 0;
+}
+.author-field select {
+  appearance: none;
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 32px 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  text-overflow: ellipsis;
+}
+.author-field > svg {
+  position: absolute;
+  right: 12px;
+  pointer-events: none;
+  color: var(--muted);
+}
+.search-help {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.9;
+  margin: 10px 0 4px;
+}
+.collection-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 12px 0;
+}
+.collection-results {
+  font-size: 12px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.collection-summary .text-link {
+  font-size: 12px;
 }
 .sort-field {
   display: flex;
@@ -1153,37 +1227,6 @@ button {
 .range-row .large-type {
   font-size: 28px;
 }
-.theme-options {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-}
-.theme-choice {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  height: 49px;
-  border-radius: 4px;
-  border: 1px solid var(--line);
-  font-size: 11px;
-}
-.theme-choice.light {
-  background: #fff;
-  color: #3d483d;
-}
-.theme-choice.paper {
-  background: #f1eee5;
-  color: #4f5846;
-}
-.theme-choice.dark {
-  background: #27342c;
-  color: #e8e9df;
-}
-.theme-choice[aria-pressed="true"] {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
 .switch-group {
   display: flex;
   align-items: center;
@@ -1367,7 +1410,7 @@ button {
 .reader-shell {
   --reader-gutter: clamp(12px, 1.2vw, 20px);
   height: 100dvh;
-  min-height: 400px;
+  min-height: min(400px, 100dvh);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1380,7 +1423,7 @@ button {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 25px;
+  gap: 16px;
   border-bottom: 1px solid var(--line);
 }
 .reader-back {
@@ -1398,6 +1441,8 @@ button {
   align-items: center;
   gap: 16px;
   min-width: 0;
+  flex: 1;
+  justify-content: center;
 }
 .reader-title strong {
   font-family: var(--serif);
@@ -1417,7 +1462,54 @@ button {
   display: flex;
   align-items: center;
   flex-shrink: 0;
-  gap: 15px;
+  gap: 12px;
+}
+.reader-theme-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.reader-bookmark-controls {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.bookmark-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 10px;
+  font-size: 11px;
+  white-space: nowrap;
+  color: var(--muted);
+}
+.bookmark-list-toggle {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  min-height: 44px;
+  border-left: 1px solid var(--line);
+  color: var(--muted);
+}
+.reader-theme-toggle:hover,
+.bookmark-add:hover:enabled,
+.bookmark-add.marked,
+.bookmark-list-toggle:hover {
+  color: var(--green);
+  background: var(--soft);
 }
 .direction-toggle {
   display: flex;
@@ -1543,14 +1635,6 @@ button {
 .reader-settings .typography-checks label {
   font-size: 12px;
 }
-.reader-settings .theme-options {
-  gap: 8px;
-}
-.reader-settings .theme-choice {
-  height: 44px;
-  gap: 5px;
-  padding: 0 4px;
-}
 .reader-settings .switch-group {
   padding-top: 18px;
 }
@@ -1561,20 +1645,101 @@ button {
   min-height: 44px;
   font-size: 12px;
 }
-.reader-running-head {
-  padding: 8px 0;
+.reader-quick-controls {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  letter-spacing: normal;
+}
+.reader-quick-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--text);
+  background: var(--surface);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.reader-quick-button strong {
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.reader-quick-button:hover,
+.reader-quick-button[aria-expanded="true"] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.reader-adjustment {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 25;
+  width: min(296px, calc(100vw - 24px));
+  max-height: calc(100dvh - 160px);
+  overflow-y: auto;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: 0 6px 24px #0002;
+}
+.reader-adjustment .typography-range {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  margin: 0 0 6px;
+}
+.reader-adjustment .typography-range label,
+.reader-adjustment .typography-range output {
+  margin: 0;
+  line-height: 24px;
+}
+.reader-adjustment .typography-range output {
+  margin-right: 24px;
+  font-variant-numeric: tabular-nums;
+}
+.reader-adjustment .typography-range input {
+  grid-column: 1 / -1;
+  height: 44px;
+}
+.adjustment-close {
+  position: absolute;
+  top: 8px;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  color: var(--muted);
+}
+.adjustment-steps {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  flex-shrink: 0;
+  gap: 12px;
   color: var(--muted);
-  font-size: 9px;
-  letter-spacing: 0.08em;
+  font-size: 11px;
 }
-.reader-running-head > span:last-child {
-  font-family: Arial, sans-serif;
-  letter-spacing: 0.18em;
-  font-size: 8px;
+.adjustment-steps button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--text);
+}
+.adjustment-steps button:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 .reader-viewport {
   flex: 1;
@@ -1674,27 +1839,35 @@ button {
   width: 100%;
   height: 100%;
   margin: 0;
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
+  gap: 16px;
   padding: 0 var(--reader-gutter);
 }
 .toolbar-tools {
   display: flex;
-  gap: 24px;
-  min-width: 240px;
+  align-items: center;
+  gap: 20px;
 }
-.toolbar-tools > button {
+.toolbar-tools > button,
+.toolbar-settings {
   display: flex;
   align-items: center;
   gap: 8px;
   min-height: 44px;
+  min-width: 44px;
   font-size: 11px;
   color: var(--muted);
 }
 .toolbar-tools > button:hover,
-.toolbar-tools > button[aria-expanded="true"] {
+.toolbar-settings:hover,
+.toolbar-settings[aria-expanded="true"] {
   color: var(--green);
+}
+.toolbar-settings {
+  justify-self: end;
+  justify-content: center;
 }
 .page-controls {
   display: flex;
@@ -1707,7 +1880,7 @@ button {
   justify-content: center;
   gap: 12px;
   border: 1px solid var(--line);
-  min-height: 43px;
+  min-height: 44px;
   min-width: 100px;
   padding: 8px 16px;
   border-radius: 3px;
@@ -1721,19 +1894,6 @@ button {
   height: 17px;
   width: 1px;
   background: var(--line);
-}
-.bookmark-add {
-  display: flex;
-  gap: 9px;
-  align-items: center;
-  font-size: 11px;
-  min-width: 240px;
-  justify-content: flex-end;
-  min-height: 44px;
-  color: var(--muted);
-}
-.bookmark-add.marked {
-  color: var(--green);
 }
 .reader-loading {
   position: absolute;
@@ -1826,10 +1986,6 @@ button {
   }
   .hero-circle {
     left: 10%;
-  }
-  .toolbar-tools,
-  .bookmark-add {
-    min-width: 190px;
   }
   .page-controls {
     gap: 13px;
@@ -2017,37 +2173,55 @@ button {
   .reader-header-actions {
     gap: 7px;
   }
-  .reader-running-head {
-    padding: 6px 0;
-  }
   .reader-page-bottom {
     padding: 6px 0;
   }
-  .toolbar-tools,
-  .bookmark-add {
-    min-width: 140px;
-  }
-  .toolbar-tools {
-    gap: 18px;
-  }
-  .toolbar-tools > button {
+  .toolbar-tools > button,
+  .toolbar-settings {
     flex-direction: column;
     gap: 5px;
     font-size: 9px;
   }
-  .bookmark-add > span {
+  .reader-theme-toggle > span {
     display: none;
   }
-  .bookmark-add {
-    min-width: 60px;
+  .reader-theme-toggle {
+    padding: 0;
+  }
+  .reader-info-toggle {
+    width: 36px;
+    height: 44px;
+    padding: 0;
+    justify-content: center;
+  }
+  .reader-info-label,
+  .reader-info-toggle > svg:last-child {
+    display: none;
   }
   .page-nav {
     min-width: 80px;
     padding: 8px 10px;
     gap: 6px;
   }
-  .reader-toolbar {
-    height: calc(64px + env(safe-area-inset-bottom));
+}
+@media (max-width: 900px) {
+  .toolbar-inner {
+    position: relative;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .toolbar-tools {
+    gap: 12px;
+  }
+  .reader-quick-controls {
+    position: static;
+  }
+  .page-controls {
+    gap: 8px;
+  }
+  .page-controls-divider {
+    display: none;
   }
 }
 @media (max-width: 560px) {
@@ -2217,8 +2391,11 @@ button {
   }
   .collection-tools {
     gap: 6px;
-    margin-bottom: 24px;
-    padding-bottom: 12px;
+    padding-bottom: 0;
+  }
+  .collection-filters {
+    flex-wrap: wrap;
+    gap: 0;
   }
   .filter-tabs {
     width: 100%;
@@ -2233,18 +2410,37 @@ button {
   .search-sort {
     width: 100%;
     justify-content: space-between;
-    gap: 12px;
-    margin-top: 10px;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 0;
     padding: 0;
   }
   .search-field {
     max-width: none;
-    flex: 1;
-    padding: 11px 10px;
+    flex: 1 1 100%;
+    padding: 6px 10px;
   }
   .search-field input {
     width: 100%;
+    font-size: 16px;
+  }
+  .author-field {
+    width: 100%;
+  }
+  .author-field select {
+    font-size: 16px;
+  }
+  .search-help {
+    margin-bottom: 8px;
+  }
+  .collection-summary {
+    min-height: 60px;
+  }
+  .collection-summary .text-link {
     font-size: 11px;
+  }
+  .sort-field {
+    margin-left: auto;
   }
   .sort-field select {
     font-size: 10px;
@@ -2333,11 +2529,14 @@ button {
     font-size: 20px;
   }
   .reader-header {
-    gap: 12px;
+    gap: 4px;
+  }
+  .reader-header-actions {
+    gap: 3px;
   }
   .reader-back {
-    min-width: 44px;
-    gap: 6px;
+    min-width: 28px;
+    justify-content: flex-start;
   }
   .reader-back > span {
     display: none;
@@ -2368,8 +2567,8 @@ button {
     font-size: 12px;
   }
   .reader-info-toggle {
-    width: 36px;
-    height: 36px;
+    width: 28px;
+    height: 44px;
     padding: 0;
     justify-content: center;
   }
@@ -2377,13 +2576,10 @@ button {
   .reader-info-toggle > svg:last-child {
     display: none;
   }
-  .reader-running-head {
-    font-size: 8px;
-    padding: 6px 0;
-  }
-  .reader-running-head > span:last-child {
-    font-size: 6px;
-    letter-spacing: 0.13em;
+  .bookmark-add {
+    padding: 0 6px;
+    gap: 4px;
+    font-size: 10px;
   }
   .reader-page-bottom {
     font-size: 8px;
@@ -2395,25 +2591,18 @@ button {
   .reader-end .text-link {
     font-size: 8px;
   }
-  .toolbar-inner {
-    gap: 10px;
-  }
-  .toolbar-tools {
-    gap: 16px;
-    min-width: 110px;
-  }
-  .toolbar-tools > button {
-    font-size: 8px;
+  .toolbar-tools > button,
+  .toolbar-settings {
+    font-size: 9px;
     gap: 4px;
     padding: 0;
-    min-width: 22px;
+    min-width: 44px;
   }
   .toolbar-tools svg {
     width: 18px;
   }
   .page-controls {
     gap: 8px;
-    margin-left: auto;
   }
   .page-nav {
     min-width: 44px;
@@ -2428,25 +2617,39 @@ button {
   .page-controls-divider {
     display: none;
   }
-  .bookmark-add {
-    min-width: 30px;
-    width: 35px;
-    justify-content: center;
-    padding: 0;
-  }
   .toast {
-    bottom: 99px;
+    bottom: calc(72px + env(safe-area-inset-bottom));
     font-size: 11px;
     padding: 13px 18px;
   }
   .loading-view h1 {
     font-size: 22px;
   }
-  .reader-shell {
-    min-height: 400px;
+}
+@media (max-width: 480px) {
+  .toolbar-inner,
+  .toolbar-tools,
+  .reader-quick-controls,
+  .page-controls {
+    gap: 4px;
+  }
+  .reader-quick-button {
+    min-width: 44px;
+    padding: 0 6px;
+    font-size: 10px;
+  }
+  .reader-quick-button strong,
+  .reader-quick-button > svg {
+    display: none;
   }
 }
 @media (max-width: 360px) {
+  .bookmark-add > span {
+    display: none;
+  }
+  .bookmark-add {
+    padding: 0;
+  }
   .book-cover-button {
     padding: 18px;
   }
@@ -2459,30 +2662,20 @@ button {
   .header-inner nav > button {
     font-size: 9px !important;
   }
-  .toolbar-tools {
-    gap: 12px;
-    min-width: 99px;
-  }
-  .toolbar-inner {
-    gap: 7px;
-  }
   .page-nav {
-    min-width: 40px;
+    min-width: 44px;
     padding: 8px 4px;
   }
   .page-controls {
     gap: 5px;
   }
 }
-@media (max-height: 550px) and (min-width: 560px) {
+@media (max-height: 550px) and (min-width: 901px) {
   .reader-header {
     height: 48px;
   }
   .reader-toolbar {
     height: calc(52px + env(safe-area-inset-bottom));
-  }
-  .reader-running-head {
-    padding: 4px 0;
   }
   .reader-page-bottom {
     padding: 4px 0;

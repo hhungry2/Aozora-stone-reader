@@ -136,10 +136,14 @@ test("full-book preparation allows reading and TOC jumps, reflows and only rende
   await expect(page.locator(".reader-accessible-text")).toHaveCount(1);
 
   await page
+    .getByRole("button", { name: "フォントサイズを調整", exact: true })
+    .click();
+  await page.getByLabel("フォントサイズ", { exact: true }).fill("24");
+  await page.getByRole("button", { name: "調整を閉じる", exact: true }).click();
+  await page
     .getByRole("button", { name: "読書設定を開く", exact: true })
     .click();
   await page.getByLabel("文字方向", { exact: true }).selectOption("lrTb");
-  await page.getByLabel("フォントサイズ", { exact: true }).fill("24");
   await page
     .getByRole("combobox", { name: "ページ表示", exact: true })
     .selectOption("spread");

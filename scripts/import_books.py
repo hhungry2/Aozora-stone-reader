@@ -47,6 +47,15 @@ SELECTION = (
     ("043752", "どんぐりと山猫"), ("000473", "よだかの星"),
     ("000789", "吾輩は猫である"), ("000799", "夢十夜"),
     ("000752", "坊っちゃん"), ("000424", "檸檬"), ("000624", "山月記"),
+    ("000773", "こころ"), ("000301", "人間失格"), ("000753", "文鳥"),
+    ("043017", "蜜柑"), ("000055", "芋粥"), ("000621", "名人伝"),
+    ("001737", "李陵"), ("000427", "桜の樹の下には"),
+    ("000628", "ごん狐"), ("000637", "手袋を買いに"),
+    ("054372", "赤い蝋燭と人魚"), ("056648", "人間椅子"),
+    ("056645", "押絵と旅する男"), ("045245", "高瀬舟"),
+    ("056041", "たけくらべ"), ("000360", "外科室"),
+    ("042618", "桜の森の満開の下"), ("002381", "瓶詰地獄"),
+    ("000211", "一房の葡萄"), ("000496", "恩讐の彼方に"),
 )
 ASCII_SPACE = re.compile(r"[ \t\r\n\f]+")
 BLOCK_TAGS = {"div", "p", "blockquote", "section", "li", "ul", "ol"}
@@ -514,11 +523,16 @@ def validate_book(book: dict[str, Any], audit: dict[str, Any]) -> None:
 
 
 def write_report(books: list[dict[str, Any]], audits: list[dict[str, Any]], index: dict[str, Any]) -> None:
+    authors = {person["id"] for book in books for person in book["authors"]}
+    older_orthography = "・".join(f"『{book['title']}』（{audit['orthography']}）" for book, audit in zip(books, audits) if audit["orthography"] != "新字新仮名")
     report = [
         "# 作品取り込み・検証記録", "",
-        "初期本棚は20作品。公式の書誌CSVで作品と関係人物の著作権フラグがすべて「なし」の版だけを収録した。新字新仮名を優先し、該当版のない『富嶽百景』は新字旧仮名を採用した。",
+        f"収録作品は{len(books)}作品、{len(authors)}名。公式の書誌CSVで作品と関係人物の著作権フラグがすべて「なし」の版だけを収録した。新字新仮名を優先し、{older_orthography}は新字新仮名の公開版がないため、記載の表記を採用した。",
+        "", "童話・短編・中編を中心に選定し、新美南吉、小川未明、江戸川乱歩、森鴎外、樋口一葉、泉鏡花、坂口安吾、夢野久作、有島武郎、菊池寛の作品も収録した。長い作品として『こころ』『人間失格』を含む。追加作品の公式図書カードで題名・著者・文字遣い・XHTML版の対応を確認し、作品IDを固定した。",
         "", f"- 公式CSV: {index['url']}", f"- 取得: {index['fetchedAt']}",
-        f"- CSV ZIP SHA-256: `{index['sha256']}`", f"- 変換器: `{VERSION}`", "",
+        f"- CSV ZIP SHA-256: `{index['sha256']}`", f"- 変換器: `{VERSION}`",
+        f"- 収録: {len(books)}作品・{len(authors)}名・本文合計{sum(book['characterCount'] for book in books):,}文字",
+        f"- ルビ: {sum(audit['rubyCount'] for audit in audits):,}箇所／外字Unicode化: {sum(audit['normalizedGaijiCount'] for audit in audits):,}箇所／同梱画像: {sum(audit['imageCount'] for audit in audits):,}箇所", "",
         "作品本文は原XHTMLを厳密にShift_JISデコードし、ルビの読みと括弧を除いた本文を抽出した。下記のJIS面区点による外字変換を適用した独立本文抽出結果と、JSON全ブロックを連結した結果のSHA-256・文字数が一致することを検証している。Unicodeへ変換した位置をU+FFFCに戻し、変換前の原文指紋に一致することも検証した。各ルビの親文字と読みの組を原文から独立抽出して照合し、ルビ数・原画像数（同梱画像＋Unicode変換数）の一致、UTF-16の範囲とサロゲート境界、画像の同梱、目次リンク、文字化け置換文字の不在も自動検査した。校訂注記は本文中に保持する。",
         "", "| ID | 作品 | 著者 | 本文文字数 | ルビ | 外字画像 | 見出し | 表記 |",
         "| --- | --- | --- | ---: | ---: | ---: | ---: | --- |",
@@ -545,7 +559,7 @@ def validate_committed() -> None:
     manifest = json.loads((DATA / "import-manifest.json").read_text(encoding="utf-8"))
     catalog = json.loads((DATA / "catalog.json").read_text(encoding="utf-8"))
     if [entry["id"] for entry in catalog] != [identifier for identifier, _ in SELECTION]:
-        raise ValueError("Catalog does not contain the curated 20 works in order")
+        raise ValueError(f"Catalog does not contain the curated {len(SELECTION)} works in order")
     if [entry["id"] for entry in manifest["works"]] != [entry["id"] for entry in catalog]:
         raise ValueError("Audit manifest does not match catalog order and work count")
     for entry, audit in zip(catalog, manifest["works"]):

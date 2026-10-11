@@ -1,10 +1,11 @@
 import { expect, test } from "@playwright/test";
+import catalog from "../public/data/catalog.json" with { type: "json" };
 
 test("book covers and legacy work links open the same book directly in the reader", async ({
   page,
 }) => {
   await page.goto("/");
-  await expect(page.locator(".book-card")).toHaveCount(20);
+  await expect(page.locator(".book-card")).toHaveCount(catalog.length);
   await page.getByRole("button", { name: "河童を読む", exact: true }).click();
   await expect(page).toHaveURL(/#\/read\/000069$/u);
   await expect(page.getByTestId("reader-page").locator("svg")).toBeVisible();
@@ -20,7 +21,7 @@ test("book covers and legacy work links open the same book directly in the reade
     await expect(page.getByTestId("reader-page").locator("svg")).toBeVisible();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await page.getByRole("link", { name: "本棚へ", exact: true }).click();
-    await expect(page.locator(".book-card")).toHaveCount(20);
+    await expect(page.locator(".book-card")).toHaveCount(catalog.length);
     await page.goBack();
     await expect(page).toHaveURL(new RegExp(`#/read/${id}$`, "u"));
     await expect(page.getByTestId("reader-page").locator("svg")).toBeVisible();
