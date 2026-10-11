@@ -1122,7 +1122,15 @@ export default function App() {
                 <span /> A LITTLE LIBRARY, A QUIET MOMENT
               </span>
               <p>
-                stone-engine.jsを組版エンジンに採用した、
+                <a
+                  className="hero-engine-link"
+                  href="https://www.non-standardworld.co.jp/stone-engine-js/"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  stone-engine.js
+                </a>
+                を組版エンジンに採用した、
                 <br />
                 縦書き・横書き対応の青空文庫リーダーです。
                 <br />
@@ -1486,11 +1494,14 @@ export default function App() {
               <br className="mobile-break" />
               新しい読み心地を。
             </p>
-            <p>
-              日本語のための組版エンジン stone-engine.js で、
-              <br />
-              句読点からルビまで、一文字ずつ丁寧に。
-            </p>
+            <a
+              className="text-link"
+              href="https://github.com/hhungry2/Aozora-stone-reader"
+              target="_blank"
+              rel="noreferrer"
+            >
+              GitHub <ExternalLink size={15} />
+            </a>
             <button className="text-link" onClick={() => setAbout(true)}>
               この文庫について <ArrowRight size={15} />
             </button>
