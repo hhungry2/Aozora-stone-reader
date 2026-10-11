@@ -114,6 +114,7 @@ Pagesのサブパスはワークフローが `VITE_BASE_PATH` へ渡します。
 
 ## 仕様と出典
 
+- [これまでの作業履歴](docs/work-history.md)
 - [仕様定義案](docs/specification.md)
 - [初版の実装と検証記録](docs/implementation-notes.md)
 - [作品取り込みと検証の記録](docs/import-report.md)
