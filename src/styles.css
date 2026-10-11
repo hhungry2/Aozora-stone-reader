@@ -9,6 +9,7 @@
   --paper: #f1eee5;
   --surface: #fcfbf7;
   --text: #282f2b;
+  --glyph-hover: #c62828;
   --muted: #747a70;
   --line: #deded2;
   --green: #294e44;
@@ -34,6 +35,7 @@
   --paper: #252e29;
   --surface: #28322c;
   --text: #e8e9df;
+  --glyph-hover: #ff7373;
   --muted: #a7afa3;
   --line: #414e43;
   --green: #b5cdb4;
@@ -1861,6 +1863,11 @@ button {
 .reader-page-wrap svg {
   color: var(--text);
   fill: currentColor;
+}
+@media (hover: hover) and (pointer: fine) {
+  .reader-shell[data-engine="stone"] .reader-page-wrap svg tspan:hover {
+    fill: var(--glyph-hover);
+  }
 }
 .reader-pages {
   display: flex;
