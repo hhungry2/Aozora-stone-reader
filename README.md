@@ -114,12 +114,6 @@ python -m unittest discover -s scripts -p 'test_*.py'
 
 公開ワークフローでも全作品のデータ検証とPythonの回帰テストを行います。組版テストは元の40作品の全ページと、追加作品から選んだ24作品の先頭・中間・末尾を両方向で確認します。
 
-## GitHub Pagesへ公開
-
-[公開ワークフロー](.github/workflows/pages.yml) は、`main` へのpushまたは `main` 上での手動実行で依存パッケージをインストールし、単体テストとビルドを実行して `dist/` をGitHub Pagesへ配信します。公開リポジトリ `hhungry2/Aozora-stone-reader` は **GitHub Actions** を配信元に設定済みで、`main` へのpushが公開サイトへ自動反映されます。別のリポジトリで使用する場合は、**Settings → Pages → Build and deployment → Source** で **GitHub Actions** を選んでください。
-
-Pagesのサブパスはワークフローが `VITE_BASE_PATH` へ渡します。画面のURLはハッシュ形式のため、作品への直接リンクを開いてもGitHub Pages側のルート設定は不要です。別の静的ホストでサブパスを指定する場合も、ビルド時に `VITE_BASE_PATH` を設定できます。
-
 ## 初版の制約
 
 - 長いルビは親文字の領域に収まるよう縮小します。複雑な熟語ルビの割り付けには改善の余地があります。
