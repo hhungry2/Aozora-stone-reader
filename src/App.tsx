@@ -1122,9 +1122,11 @@ export default function App() {
                 <span /> A LITTLE LIBRARY, A QUIET MOMENT
               </span>
               <p>
-                青空文庫の名作を、心地よい文字組みで。
+                stone-engine.jsを組版エンジンに採用した、
                 <br />
-                縦書きでも、横書きでも。あなたの好きな読み方で。
+                縦書き・横書き対応の青空文庫リーダーです。
+                <br />
+                禁則処理や二桁数字の縦中横にも対応。
               </p>
               <a
                 className="button primary"
