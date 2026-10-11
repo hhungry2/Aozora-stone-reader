@@ -134,7 +134,21 @@ function BookCover({
     >
       <span className="cover-edition">青空文庫</span>
       <span className="cover-line" />
-      <span className="cover-title">{displayTitle(book.title)}</span>
+      <span
+        className={`cover-title${displayTitle(book.title).length > 12 ? " long" : ""}`}
+      >
+        {displayTitle(book.title)
+          .split(/([0-9０-９]+)/u)
+          .map((part, index) =>
+            /^[0-9０-９]{1,2}$/u.test(part) ? (
+              <span className="cover-tcy" key={index}>
+                {part}
+              </span>
+            ) : (
+              part
+            ),
+          )}
+      </span>
       <span className="cover-author">{book.authorLabel}</span>
       <span className="cover-no">{String(index + 1).padStart(2, "0")}</span>
       <span className="cover-grain" />

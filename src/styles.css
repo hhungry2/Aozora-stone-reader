@@ -534,7 +534,7 @@ button {
   writing-mode: vertical-rl;
   position: absolute;
   bottom: 18%;
-  left: 20%;
+  left: 16%;
   font-family: var(--serif);
   font-size: 10px;
   letter-spacing: 0.2em;
@@ -544,6 +544,14 @@ button {
 }
 .book-cover-button .cover-title {
   font-size: clamp(12px, 14cqw, 28px);
+}
+.book-cover-button .cover-title.long {
+  font-size: clamp(9px, 11cqw, 24px);
+  right: 17%;
+}
+.cover-tcy {
+  text-combine-upright: all;
+  letter-spacing: normal;
 }
 .cover-edition {
   position: absolute;
@@ -2534,7 +2542,7 @@ button {
   }
   .cover-author {
     font-size: 9px;
-    left: 20%;
+    left: 16%;
   }
   .cover-edition {
     font-size: 6px;
