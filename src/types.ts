@@ -127,6 +127,7 @@ export const latinFontOptions = [
 export interface ReaderSettings {
   direction: "tbRl" | "lrTb";
   pageLayout: "single" | "spread";
+  paginationMode: "on-demand" | "batch" | "all";
   fontSize: number;
   lineHeight: number;
   font: keyof typeof fontFamilies;
@@ -161,6 +162,7 @@ export interface ReadingRecord {
 export const defaultSettings: ReaderSettings = {
   direction: "tbRl",
   pageLayout: "single",
+  paginationMode: "on-demand",
   fontSize: 20,
   lineHeight: 1.9,
   font: "serif",

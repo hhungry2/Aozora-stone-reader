@@ -970,62 +970,66 @@ button {
   color: #9b493d;
   font-size: 11px;
 }
-.work-info {
-  display: grid;
-  grid-template-columns: 190px 1fr;
-  gap: 32px;
+.reader-work-info {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--line);
 }
-.work-info .book-cover {
-  width: 100%;
-  margin-top: 5px;
-}
-.work-info .cover-title {
-  font-size: 26px;
-}
-.work-info h2 {
-  font-size: 29px;
-  font-weight: 500;
-  line-height: 1.6;
-  margin: 17px 0 8px;
-  letter-spacing: 0.04em;
-}
-.work-info-copy {
-  min-width: 0;
-}
-.work-author {
-  font-size: 12px;
-  color: var(--muted);
-}
-.work-facts {
-  display: flex;
-  gap: 17px;
-  color: var(--muted);
-  font-size: 10px;
-  margin: 20px 0;
-}
-.work-facts span {
+.reader-info-toggle {
   display: flex;
   align-items: center;
-  gap: 6px;
-}
-.work-excerpt {
-  font-family: var(--serif);
-  font-size: 12px;
-  line-height: 2;
+  flex-shrink: 0;
+  gap: 7px;
+  height: 40px;
+  padding: 0 8px;
   color: var(--muted);
-  margin-bottom: 20px;
+  font-size: 11px;
+  white-space: nowrap;
 }
-.button-stack {
+.reader-info-toggle > svg {
+  flex-shrink: 0;
+}
+.reader-info-toggle[aria-expanded="true"] > svg:last-child {
+  transform: rotate(180deg);
+}
+.reader-work-info-facts {
+  font-size: 10px;
+  white-space: nowrap;
+}
+@media (max-width: 1100px) {
+  .reader-info-toggle .reader-work-info-facts {
+    display: none;
+  }
+}
+.reader-work-info-content {
+  max-height: min(34dvh, 280px);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+  padding: 14px 18px 18px;
+  margin-bottom: 8px;
+  background: var(--surface);
+  font-size: 12px;
+  line-height: 1.8;
+}
+.reader-work-info-heading h2 {
+  font-size: 22px;
+  font-weight: 500;
+}
+.reader-work-info-heading p {
+  color: var(--muted);
+}
+.reader-work-info-actions {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 19px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 24px;
+  margin: 4px 0 10px;
 }
-.button-stack .button {
-  justify-content: space-between;
+.reader-work-info-actions > * {
+  min-height: 36px;
 }
-.button-stack .button > span {
-  margin-left: auto;
+.reader-credits > summary {
+  cursor: pointer;
   font-size: 11px;
 }
 .credits {
@@ -1037,8 +1041,6 @@ button {
   background: var(--paper);
   padding: 14px;
   margin-top: 10px;
-  max-height: 240px;
-  overflow: auto;
 }
 .conversion-details {
   font-size: 10px;
@@ -1414,6 +1416,7 @@ button {
 .reader-header-actions {
   display: flex;
   align-items: center;
+  flex-shrink: 0;
   gap: 15px;
 }
 .direction-toggle {
@@ -1639,6 +1642,12 @@ button {
 .reader-end .text-link {
   font-size: 9px;
   padding: 0 6px;
+}
+.reader-preload-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
 }
 .reader-toolbar {
   height: calc(60px + env(safe-area-inset-bottom));
@@ -2323,53 +2332,6 @@ button {
   .modal-head h2 {
     font-size: 20px;
   }
-  .work-info {
-    grid-template-columns: 100px 1fr;
-    gap: 20px;
-    align-items: start;
-  }
-  .work-info h2 {
-    font-size: 23px;
-    margin-top: 12px;
-  }
-  .work-info .eyebrow {
-    font-size: 7px;
-    letter-spacing: 0.09em;
-  }
-  .work-info .book-cover {
-    margin-top: 5px;
-  }
-  .work-info .cover-title {
-    font-size: 17px;
-  }
-  .work-info .cover-author {
-    font-size: 7px;
-  }
-  .work-info .cover-edition {
-    font-size: 5px;
-  }
-  .work-info-copy .work-excerpt {
-    font-size: 11px;
-    line-height: 1.9;
-  }
-  .work-facts {
-    flex-direction: column;
-    gap: 7px;
-    margin: 14px 0;
-  }
-  .button-stack .button {
-    font-size: 11px;
-    min-height: 43px;
-    padding: 11px 13px;
-    gap: 10px;
-  }
-  .work-info .external-link {
-    font-size: 10px;
-    line-height: 1.8;
-  }
-  .work-info .text-link {
-    font-size: 10px;
-  }
   .reader-header {
     gap: 12px;
   }
@@ -2405,7 +2367,14 @@ button {
     height: 32px;
     font-size: 12px;
   }
-  .desktop-info {
+  .reader-info-toggle {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    justify-content: center;
+  }
+  .reader-info-label,
+  .reader-info-toggle > svg:last-child {
     display: none;
   }
   .reader-running-head {

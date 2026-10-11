@@ -36,6 +36,10 @@ for (const direction of ["tbRl", "lrTb"] as const) {
     await expect(rendered.locator("svg")).toHaveCount(2);
     await expect(page.locator(".reader-loading")).toHaveCount(0);
     const leaves = page.getByTestId("reader-leaf");
+    await expect(leaves.nth(0).locator(".reader-opening")).toHaveText(
+      "羅生門芥川竜之介",
+    );
+    await expect(leaves.nth(1).locator(".reader-opening")).toHaveCount(0);
     expect(await leaves.nth(1).getAttribute("data-start")).toBe(
       await leaves.nth(0).getAttribute("data-end"),
     );

@@ -42,6 +42,16 @@ export interface InlineImagePlacement {
   height: number;
 }
 
+export interface ReaderOpening {
+  title: string;
+  subtitle: string;
+  author: string;
+  glyphs: GlyphElement[];
+  x: number;
+  y: number;
+  scale: number;
+}
+
 export interface ReaderPageData {
   start: Anchor;
   end: Anchor;
@@ -58,9 +68,47 @@ export interface ReaderPageData {
   emphasis: { x: number; y: number; radius: number }[];
   images: InlineImagePlacement[];
   ranges: BookRange[];
+  opening?: ReaderOpening;
 }
 
-/** Only the source and a small offset table are kept for a whole book, never its glyphs. */
+/** Keep the title outside the source index so existing anchors and copying stay intact. */
+function layoutOpening(book: Book, settings: ReaderSettings, width: number, height: number, measurer: FontMeasurer) {
+  const vertical = settings.direction === 'tbRl';
+  const text = [book.title, book.subtitle, book.authorLabel].filter(Boolean).join('\n');
+  if (!text) return null;
+  const context = new StoneContext({
+    direction: settings.direction, fontSize: settings.fontSize * 1.25, lineHeightScale: 1.6,
+    punctuationMode: settings.punctuationMode, kinsoku: settings.kinsoku,
+    dividesByWords: settings.dividesByWords, allowsTateChuYoko: settings.allowsTateChuYoko,
+    fonts: readerFonts(settings),
+  }, measurer);
+  context.renderSize = vertical ? { width: Infinity, height } : { width, height: Infinity };
+  const parsed = parseText(text, settings.dividesByWords);
+  context.runs = parsed.runs;
+  context.tokens = parsed.tokens;
+  applyFontStyleSpans(context, [{ start: 0, end: book.title.length, fontWeight: 700 }]);
+  measureRuns(context);
+  new Layouter(context).layout();
+  const left = Math.min(...context.runs.map((run) => run.frame.x));
+  const top = Math.min(...context.runs.map((run) => run.frame.y));
+  const right = Math.max(...context.runs.map((run) => run.frame.x + run.frame.width));
+  const bottom = Math.max(...context.runs.map((run) => run.frame.y + run.frame.height));
+  for (const run of context.runs) translateRun(run, -left, -top);
+  const extent = vertical ? right - left : bottom - top;
+  // Long titles and large font settings must still leave room for the body.
+  const available = vertical ? width : height;
+  const scale = Math.min(1, available * 0.4 / extent);
+  const gap = Math.min(settings.fontSize * 1.5, available * 0.1);
+  return {
+    extent: extent * scale, gap,
+    opening: {
+      title: book.title, subtitle: book.subtitle, author: book.authorLabel,
+      glyphs: glyphElements(context), x: 0, y: 0, scale,
+    },
+  };
+}
+
+/** Source positions stay independent of the selected page cache policy. */
 export function indexBook(book: Book): BookIndex {
   const ranges: BookRange[] = [];
   const pieces: string[] = [];
@@ -227,6 +275,8 @@ export class PaginationEngine {
   readonly index: BookIndex;
   private readonly cache = new Map<number, ReaderPageData>();
   private readonly predecessors = new Map<number, number>();
+  private preparedPosition = 0;
+  private preparedCount = 0;
   readonly windowSize: number;
 
   constructor(
@@ -242,6 +292,21 @@ export class PaginationEngine {
   }
 
   get cacheSize(): number { return this.cache.size; }
+  get preparedBookPosition(): number { return this.preparedPosition; }
+  get preparedBookPages(): number { return this.preparedCount; }
+
+  /** Prepare glyphs without replacing the reader's forward/backward navigation path. */
+  preloadPage(position: number): ReaderPageData {
+    return this.layoutPage(position, undefined, false);
+  }
+
+  /** The cursor survives interruptions so paging does not restart full-book preparation. */
+  preloadNextBookPage(): void {
+    if (this.preparedPosition >= this.index.text.length) return;
+    const page = this.preloadPage(this.preparedPosition);
+    this.preparedPosition = page.globalEnd;
+    this.preparedCount += 1;
+  }
 
   pageAt(anchor: Anchor | null): ReaderPageData {
     return this.pageAtPosition(positionOf(this.index, anchor));
@@ -255,10 +320,15 @@ export class PaginationEngine {
   }
 
   pageAtPosition(requested: number, stopAt?: number): ReaderPageData {
+    return this.layoutPage(requested, stopAt, true);
+  }
+
+  private layoutPage(requested: number, stopAt: number | undefined, rememberPredecessor: boolean): ReaderPageData {
     const start = safeStart(this.index, requested);
     const cached = this.cache.get(start);
     if (cached && (stopAt === undefined || cached.globalEnd <= stopAt)) {
       this.cache.delete(start); this.cache.set(start, cached);
+      if (rememberPredecessor && cached.globalEnd > start) this.predecessors.set(cached.globalEnd, start);
       return cached;
     }
     const vertical = this.settings.direction === 'tbRl';
@@ -268,8 +338,12 @@ export class PaginationEngine {
     const leadingMargin = Math.max(margin, fontSize * 0.7);
     // Reserve a lane even with ruby hidden, so the toggle does not change pagination.
     const annotationLane = fontSize * 0.92;
-    const bodyWidth = Math.max(fontSize * 2, this.width - margin - (vertical ? margin + annotationLane : leadingMargin));
-    const bodyHeight = Math.max(fontSize * 2, this.height - margin - (vertical ? leadingMargin : margin + annotationLane));
+    let bodyWidth = Math.max(fontSize * 2, this.width - margin - (vertical ? margin + annotationLane : leadingMargin));
+    let bodyHeight = Math.max(fontSize * 2, this.height - margin - (vertical ? leadingMargin : margin + annotationLane));
+    const opening = start === 0 ? layoutOpening(this.book, this.settings, bodyWidth, bodyHeight, this.measurer) : null;
+    const openingSpace = opening ? opening.extent + opening.gap : 0;
+    if (vertical) bodyWidth -= openingSpace;
+    else bodyHeight -= openingSpace;
     const imageRange = this.index.ranges.find((range) => range.block.kind === 'image' && range.block.image && range.end > start);
     const imagePage = imageRange?.start === start;
     const imageLimit = imageRange
@@ -324,20 +398,26 @@ export class PaginationEngine {
       start: anchorAt(this.index, start), end: anchorAt(this.index, pageEnd),
       globalStart: start, globalEnd: pageEnd, text: this.index.text.slice(start, pageEnd),
       width: this.width, height: this.height, insetX: vertical ? margin : leadingMargin,
-      insetY: vertical ? leadingMargin : margin + annotationLane, context,
+      insetY: vertical ? leadingMargin : margin + annotationLane + openingSpace, context,
       glyphs: glyphParagraphs(context).flatMap((paragraph) => paragraph.groups.flatMap((group) => group.glyphs))
         .filter((glyph) => glyph.text !== '\ufffc'),
       rubies: [], emphasis: [], images: [],
       ranges: this.index.ranges.filter((r) => r.end >= start && r.start < pageEnd),
+      opening: opening ? {
+        ...opening.opening,
+        x: vertical ? margin + bodyWidth + opening.gap : leadingMargin,
+        y: vertical ? leadingMargin : margin + annotationLane,
+      } : undefined,
     };
     this.decorate(page, offsets, rubies);
     if (imagePage && imageRange?.block.image) {
       page.glyphs = [];
       page.images = [{ ...imageRange.block.image, x: 0, y: 0, width: bodyWidth, height: bodyHeight }];
     }
-    if (pageEnd > start) this.predecessors.set(pageEnd, start);
+    if (rememberPredecessor && pageEnd > start) this.predecessors.set(pageEnd, start);
     this.cache.set(start, page);
-    while (this.cache.size > 3) this.cache.delete(this.cache.keys().next().value!);
+    const limit = this.settings.paginationMode === 'all' ? Infinity : this.settings.paginationMode === 'batch' ? 14 : 3;
+    while (this.cache.size > limit) this.cache.delete(this.cache.keys().next().value!);
     return page;
   }
 

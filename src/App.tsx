@@ -56,7 +56,10 @@ const formatMinutes = (characters: number) => {
 const palettes = ["pine", "clay", "slate", "olive", "wine", "ochre"];
 function getRoute() {
   const [screen, id] = location.hash.replace(/^#\/?/, "").split("/");
-  return { screen: screen || "library", id: id || "" };
+  return {
+    screen: screen === "works" ? "read" : screen || "library",
+    id: id || "",
+  };
 }
 function navigate(path: string) {
   location.hash = path;
@@ -111,15 +114,13 @@ function Brand({ compact = false }: { compact?: boolean }) {
 function BookCover({
   book,
   index = 0,
-  large = false,
 }: {
   book: CatalogEntry;
   index?: number;
-  large?: boolean;
 }) {
   return (
     <div
-      className={`book-cover ${palettes[index % palettes.length]} ${large ? "large" : ""}`}
+      className={`book-cover ${palettes[index % palettes.length]}`}
       aria-hidden="true"
     >
       <span className="cover-edition">青空文庫</span>
@@ -272,89 +273,60 @@ function About({
   );
 }
 
-function WorkInfo({
+function WorkDetails({
   book,
-  index,
-  onClose,
-  onRead,
-  record,
+  onRestart,
 }: {
-  book: CatalogEntry | Book;
-  index: number;
-  onClose: () => void;
-  onRead: (restart: boolean) => void;
-  record?: ReadingRecord | null;
+  book: Book;
+  onRestart: () => void;
 }) {
-  const full = "blocks" in book ? book : null;
-  const [showCredits, setShowCredits] = useState(false);
   return (
-    <Modal title="作品情報" onClose={onClose} wide>
-      <div className="work-info">
-        <BookCover book={book} index={index} large />
-        <div className="work-info-copy">
-          <span className="eyebrow">
-            AOZORA COLLECTION / {String(index + 1).padStart(2, "0")}
-          </span>
-          <h2 className="serif">{book.title}</h2>
-          {book.subtitle && <p>{book.subtitle}</p>}
-          <p className="work-author">{book.authorLabel}</p>
-          <div className="work-facts">
-            <span>
-              <Clock3 size={15} /> {formatMinutes(book.characterCount)}
-            </span>
-            <span>{book.characterCount.toLocaleString()}文字</span>
-          </div>
-          <p className="work-excerpt">{book.excerpt}</p>
-          <div className="button-stack">
-            {record && (
-              <button className="button primary" onClick={() => onRead(false)}>
-                <BookOpen size={17} />
-                続きから読む <span>{Math.round(record.progress * 100)}%</span>
-              </button>
-            )}
-            <button
-              className={`button ${record ? "" : "primary"}`}
-              onClick={() => onRead(true)}
-            >
-              {record ? "最初から読む" : "この作品を読む"}
-              <ArrowRight size={17} />
-            </button>
-          </div>
-          <a
-            className="external-link"
-            href={book.cardUrl}
-            target="_blank"
-            rel="noreferrer"
-          >
-            青空文庫の図書カード <ExternalLink size={14} />
-          </a>
-          {full && (
-            <>
-              <button
-                className="text-link"
-                onClick={() => setShowCredits(!showCredits)}
-              >
-                底本・制作情報 <ChevronDown size={14} />
-              </button>
-              {showCredits && <pre className="credits">{full.credits}</pre>}
-              {full.conversion.warnings.length > 0 && (
-                <details className="conversion-details">
-                  <summary>表示形式の変更について</summary>
-                  <p>
-                    原文の文字を保持し、以下の特殊な配置を読みやすい形式に整えています。
-                  </p>
-                  <ul>
-                    {full.conversion.warnings.map((warning, i) => (
-                      <li key={i}>{warning}</li>
-                    ))}
-                  </ul>
-                </details>
-              )}
-            </>
-          )}
-        </div>
+    <div
+      className="reader-work-info-content"
+      role="region"
+      aria-label="作品情報の詳細"
+      tabIndex={0}
+    >
+      <div className="reader-work-info-heading">
+        <h2 className="serif">{book.title}</h2>
+        {book.subtitle && <p>{book.subtitle}</p>}
+        <p>{book.authorLabel}</p>
+        <p className="reader-work-info-facts">
+          {formatMinutes(book.characterCount)} ·{" "}
+          {book.characterCount.toLocaleString()}文字
+        </p>
       </div>
-    </Modal>
+      <div className="reader-work-info-actions">
+        <a
+          className="external-link"
+          href={book.cardUrl}
+          target="_blank"
+          rel="noreferrer"
+        >
+          青空文庫の図書カード <ExternalLink size={14} />
+        </a>
+        <button className="text-link" onClick={onRestart}>
+          最初から読む <ArrowRight size={15} />
+        </button>
+      </div>
+      <details className="reader-credits">
+        <summary>底本・制作情報</summary>
+        <pre className="credits">{book.credits}</pre>
+      </details>
+      {book.conversion.warnings.length > 0 && (
+        <details className="conversion-details">
+          <summary>表示形式の変更について</summary>
+          <p>
+            原文の文字を保持し、以下の特殊な配置を読みやすい形式に整えています。
+          </p>
+          <ul>
+            {book.conversion.warnings.map((warning, i) => (
+              <li key={i}>{warning}</li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </div>
   );
 }
 
@@ -423,6 +395,31 @@ function SettingsPanel({
           <option value="single">1ページ</option>
           <option value="spread">見開き（横長の画面で2ページ）</option>
         </select>
+      </div>
+      <div className="setting-group">
+        <label htmlFor="pagination-mode">ページの準備</label>
+        <select
+          id="pagination-mode"
+          value={settings.paginationMode}
+          onChange={(event) =>
+            set(
+              "paginationMode",
+              event.target.value as ReaderSettings["paginationMode"],
+            )
+          }
+          aria-describedby="pagination-mode-note"
+        >
+          <option value="on-demand">必要なページだけ（従来）</option>
+          <option value="batch">10ページ先読み</option>
+          <option value="all">全ページ組版</option>
+        </select>
+        <p id="pagination-mode-note" className="fine-print">
+          {settings.paginationMode === "all"
+            ? "読書を続けながら作品全体を準備します。長い作品ほど時間とメモリを使います。"
+            : settings.paginationMode === "batch"
+              ? "現在位置から先の10ページを準備し、読み進めるたびに補充します。"
+              : "表示するページと次の1ページを準備します。"}
+        </p>
       </div>
       <div className="typography-row">
         <div className="setting-group">
@@ -630,7 +627,6 @@ export default function App() {
   const [book, setBook] = useState<Book | null>(null);
   const [bookError, setBookError] = useState("");
   const [retry, setRetry] = useState(0);
-  const [restartId, setRestartId] = useState<string | null>(null);
   const [saveWarning, setSaveWarning] = useState("");
   const bookCache = useRef(new Map<string, Book>());
   const notify = useCallback((message: string) => {
@@ -643,9 +639,18 @@ export default function App() {
   }, [toast]);
   useEffect(() => {
     const change = () => {
-      setRoute(getRoute());
+      const next = getRoute();
+      if (/^#\/?works(?:\/|$)/u.test(location.hash)) {
+        window.history.replaceState(
+          window.history.state,
+          "",
+          `#/read/${next.id}`,
+        );
+      }
+      setRoute(next);
       window.scrollTo(0, 0);
     };
+    change();
     window.addEventListener("hashchange", change);
     return () => window.removeEventListener("hashchange", change);
   }, []);
@@ -668,7 +673,7 @@ export default function App() {
   }, [retry]);
   const selected = catalog.find((b) => b.id === route.id);
   useEffect(() => {
-    if (!selected || !["read", "works"].includes(route.screen)) return;
+    if (!selected || route.screen !== "read") return;
     const abort = new AbortController();
     setBook(null);
     setBookError("");
@@ -724,8 +729,7 @@ export default function App() {
           ? recent.some((r) => r.bookId === b.id)
           : true,
   );
-  const openRead = (id: string, restart: boolean) => {
-    setRestartId(restart ? id : null);
+  const openRead = (id: string) => {
     navigate(`/read/${id}`);
   };
   const isReader = route.screen === "read";
@@ -761,7 +765,7 @@ export default function App() {
               </a>
               <button
                 onClick={() => {
-                  if (resume) openRead(resume.id, false);
+                  if (resume) openRead(resume.id);
                   else notify("作品を読むと、ここから続きに戻れます");
                 }}
               >
@@ -775,7 +779,7 @@ export default function App() {
       )}
       {isReader ? (
         selected ? (
-          book ? (
+          book?.id === selected.id ? (
             <ReaderBoundary key={book.id}>
               <ReadingView
                 key={book.id}
@@ -783,8 +787,6 @@ export default function App() {
                 settings={settings}
                 onSettings={updateSettings}
                 onSave={updateRecord}
-                restart={restartId === book.id}
-                onRestartConsumed={() => setRestartId(null)}
                 onAbout={() => setAbout(true)}
                 onNotify={notify}
                 storageVersion={recordVersion}
@@ -895,11 +897,11 @@ export default function App() {
                       index={5}
                     />
                   </div>
-                  <div
-                    className="hero-book front"
-                    onClick={() => navigate(`/works/${featured.id}`)}
-                  >
-                    <button aria-label={`${featured.title}の作品情報`}>
+                  <div className="hero-book front">
+                    <button
+                      aria-label={`${featured.title}を読む`}
+                      onClick={() => openRead(featured.id)}
+                    >
                       <BookCover book={featured} index={0} />
                     </button>
                   </div>
@@ -943,10 +945,7 @@ export default function App() {
                 </div>
                 <span>{Math.round(recent[0].record.progress * 100)}% 読了</span>
               </div>
-              <button
-                className="text-link"
-                onClick={() => openRead(resume.id, false)}
-              >
+              <button className="text-link" onClick={() => openRead(resume.id)}>
                 続きから読む <ArrowRight size={17} />
               </button>
             </section>
@@ -1052,13 +1051,13 @@ export default function App() {
                     <article className="book-card" key={b.id}>
                       <button
                         className="book-cover-button"
-                        onClick={() => navigate(`/works/${b.id}`)}
-                        aria-label={`${b.title}の作品情報`}
+                        onClick={() => openRead(b.id)}
+                        aria-label={`${b.title}を読む`}
                       >
                         <BookCover book={b} index={index} />
                         <span className="cover-open">
                           <BookOpen size={17} />
-                          作品を開く
+                          読む
                         </span>
                       </button>
                       <div className="book-card-copy">
@@ -1072,13 +1071,13 @@ export default function App() {
                           </span>
                         </div>
                         <h3>
-                          <a href={`#/works/${b.id}`}>{b.title}</a>
+                          <a href={`#/read/${b.id}`}>{b.title}</a>
                         </h3>
                         <p>{b.authorLabel}</p>
                         {record && (
                           <button
                             className="card-resume"
-                            onClick={() => openRead(b.id, false)}
+                            onClick={() => openRead(b.id)}
                           >
                             <span>続きから</span>
                             <span>
@@ -1127,23 +1126,6 @@ export default function App() {
           </button>
         </footer>
       )}
-      {route.screen === "works" && selected && (
-        <WorkInfo
-          book={book || selected}
-          index={catalog.indexOf(selected)}
-          record={readerStorage.getRecord(selected.id)}
-          onClose={() => navigate("/")}
-          onRead={(restart) => openRead(selected.id, restart)}
-        />
-      )}
-      {route.screen === "works" && catalog.length > 0 && !selected && (
-        <Modal title="作品が見つかりません" onClose={() => navigate("/")}>
-          <p>この作品は収録されていません。</p>
-          <a className="button primary" href="#/">
-            本棚に戻る
-          </a>
-        </Modal>
-      )}
       {about && <About onClose={() => setAbout(false)} onClear={clear} />}
       {saveWarning && (
         <div className="save-warning" role="status">
@@ -1169,8 +1151,6 @@ function ReadingView({
   settings,
   onSettings,
   onSave,
-  restart,
-  onRestartConsumed,
   onAbout,
   onNotify,
   storageVersion,
@@ -1180,8 +1160,6 @@ function ReadingView({
   settings: ReaderSettings;
   onSettings: (s: ReaderSettings) => void;
   onSave: (id: string, record: ReadingRecord) => void;
-  restart: boolean;
-  onRestartConsumed: () => void;
   onAbout: () => void;
   onNotify: (s: string) => void;
   storageVersion: number;
@@ -1189,13 +1167,15 @@ function ReadingView({
 }) {
   const initial = useRef<{ anchor: Anchor; adjusted: boolean } | null>(null);
   if (!initial.current) {
-    const previous = restart ? null : readerStorage.getRecord(book.id);
+    const previous = readerStorage.getRecord(book.id);
     initial.current = previous
       ? restoreAnchor(book, previous.anchor, previous.contentVersion)
       : { anchor: createAnchor(book, book.blocks[0].id, 0), adjusted: false };
   }
   const [anchor, setAnchor] = useState<Anchor>(initial.current.anchor);
-  const [panel, setPanel] = useState<"toc" | "bookmarks" | "info" | null>(null);
+  const [panel, setPanel] = useState<"toc" | "bookmarks" | null>(null);
+  const [infoOpen, setInfoOpen] = useState(false);
+  const info = useRef<HTMLDivElement>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [landscape, setLandscape] = useState(
@@ -1221,6 +1201,7 @@ function ReadingView({
     previousAnchor,
     progress,
     isEnd,
+    preload,
     retry: retryLayout,
   } = usePagination({
     book,
@@ -1243,8 +1224,9 @@ function ReadingView({
     return () => query.removeEventListener("change", update);
   }, []);
   useEffect(() => {
-    if (restart) onRestartConsumed();
-  }, [restart, onRestartConsumed]);
+    if (infoOpen)
+      info.current?.querySelector<HTMLElement>('[role="region"]')?.focus();
+  }, [infoOpen]);
   useEffect(() => {
     if (initial.current?.adjusted)
       onNotify("作品データの更新により読書位置を調整しました");
@@ -1319,7 +1301,7 @@ function ReadingView({
         panel ||
         document.querySelector("dialog[open]") ||
         (event.target as HTMLElement).closest(
-          ".reader-settings,input,select,textarea,button,a,[contenteditable]",
+          ".reader-settings,.reader-work-info,input,select,textarea,button,a,[contenteditable]",
         )
       )
         return;
@@ -1459,6 +1441,11 @@ function ReadingView({
         b.anchor.blockId === page.start.blockId &&
         b.anchor.offset === page.start.offset,
     );
+  const openInfo = () => {
+    setPanel(null);
+    setSettingsOpen(false);
+    setInfoOpen(true);
+  };
   const next = (
     <button
       className="page-nav next"
@@ -1533,16 +1520,38 @@ function ReadingView({
             </button>
           </div>
           <button
-            className="icon-button desktop-info"
-            aria-label="作品情報"
-            onClick={() => setPanel("info")}
+            className="reader-info-toggle"
+            aria-label={infoOpen ? "作品情報を閉じる" : "作品情報を開く"}
+            aria-expanded={infoOpen}
+            aria-controls="reader-work-info"
+            onClick={() => (infoOpen ? setInfoOpen(false) : openInfo())}
           >
-            <Info size={19} />
+            <Info size={19} aria-hidden="true" />
+            <span className="reader-info-label">作品情報</span>
+            <span className="reader-work-info-facts">
+              {formatMinutes(book.characterCount)} ·{" "}
+              {book.characterCount.toLocaleString()}文字
+            </span>
+            <ChevronDown size={14} aria-hidden="true" />
           </button>
         </div>
       </header>
       <div className="reader-workspace">
         <main id="main-content" tabIndex={-1} className="reader-main">
+          <div
+            ref={info}
+            id="reader-work-info"
+            className="reader-work-info"
+            hidden={!infoOpen}
+          >
+            <WorkDetails
+              book={book}
+              onRestart={() => {
+                setAnchor(createAnchor(book, book.blocks[0].id, 0));
+                setInfoOpen(false);
+              }}
+            />
+          </div>
           <div className="reader-running-head">
             <span>
               {vertical ? "縦書き" : "横書き"} /{" "}
@@ -1627,15 +1636,41 @@ function ReadingView({
                 <>
                   <Check size={14} />
                   読み終わり{" "}
-                  <button
-                    className="text-link"
-                    onClick={() => setPanel("info")}
-                  >
+                  <button className="text-link" onClick={openInfo}>
                     底本・制作情報
                   </button>
                 </>
-              ) : (
+              ) : settings.paginationMode === "on-demand" ? (
                 "言葉のつづきへ。"
+              ) : null}
+              {settings.paginationMode !== "on-demand" && (
+                <span
+                  className="reader-preload-status"
+                  data-testid="pagination-preload"
+                  data-mode={settings.paginationMode}
+                  data-state={preload?.state ?? "running"}
+                  data-pages={preload?.preparedPages ?? 0}
+                  title={preload?.error ?? undefined}
+                >
+                  {preload?.state === "error" ? (
+                    <>
+                      先読みを停止しました{" "}
+                      <button className="text-link" onClick={retryLayout}>
+                        再試行
+                      </button>
+                    </>
+                  ) : settings.paginationMode === "all" ? (
+                    preload?.state === "complete" ? (
+                      `全${preload.preparedPages}ページ 組版済み`
+                    ) : (
+                      `全ページ組版中 · ${Math.floor((preload?.progress ?? 0) * 100)}%`
+                    )
+                  ) : preload?.state === "complete" ? (
+                    `${preload.preparedPages}ページ先読み済み`
+                  ) : (
+                    `先読み中 · ${preload?.preparedPages ?? 0}/10ページ`
+                  )}
+                </span>
               )}
             </span>
             <span aria-live="polite">
@@ -1687,7 +1722,10 @@ function ReadingView({
               aria-label={settingsOpen ? "読書設定を閉じる" : "読書設定を開く"}
               aria-expanded={settingsOpen}
               aria-controls="reader-settings-panel"
-              onClick={() => setSettingsOpen((open) => !open)}
+              onClick={() => {
+                if (!settingsOpen) setInfoOpen(false);
+                setSettingsOpen((open) => !open);
+              }}
             >
               <Settings2 size={19} />
               <span>設定</span>
@@ -1712,18 +1750,6 @@ function ReadingView({
           </button>
         </div>
       </footer>
-      {panel === "info" && (
-        <WorkInfo
-          book={book}
-          index={index}
-          record={record}
-          onClose={() => setPanel(null)}
-          onRead={(reset) => {
-            if (reset) setAnchor(createAnchor(book, book.blocks[0].id, 0));
-            setPanel(null);
-          }}
-        />
-      )}
       {panel === "toc" && (
         <Modal title="目次" onClose={() => setPanel(null)}>
           <div className="toc-list">
@@ -1753,7 +1779,7 @@ function ReadingView({
           {!book.toc.length && (
             <p className="fine-print">この作品に章の見出しはありません。</p>
           )}
-          <button className="text-link" onClick={() => setPanel("info")}>
+          <button className="text-link" onClick={openInfo}>
             底本・制作情報を読む <Info size={14} />
           </button>
         </Modal>

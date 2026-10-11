@@ -94,6 +94,7 @@ export function createReaderStorage(storage: StorageLike | null = browserStorage
     const valid: Record<keyof ReaderSettings, boolean> = {
       direction: value.direction === 'tbRl' || value.direction === 'lrTb',
       pageLayout: value.pageLayout === 'single' || value.pageLayout === 'spread',
+      paginationMode: ['on-demand', 'batch', 'all'].includes(value.paginationMode as string),
       fontSize: inSteps(value.fontSize, 10, 48, 1),
       lineHeight: inSteps(lineHeight, 1, 3, 0.05),
       font: typeof value.font === 'string' && Object.hasOwn(fontFamilies, value.font),

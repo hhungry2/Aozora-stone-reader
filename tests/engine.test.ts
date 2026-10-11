@@ -15,6 +15,32 @@ function fixture(blocks: Partial<TextBlock>[]): Book {
 }
 
 for (const direction of ['tbRl', 'lrTb'] as const) describe(`Stone pagination ${direction}`, () => {
+  it('places work information before the opening passage without changing source anchors', () => {
+    const book = fixture([{ text: '　元の本文を保つ。'.repeat(80) }]);
+    book.title = '作品の題名';
+    book.subtitle = '作品の副題';
+    book.authorLabel = '著者名';
+    const engine = new PaginationEngine(book, { ...defaultSettings, direction }, 320, 370);
+    const first = engine.pageAtPosition(0);
+    const opening = first.opening!;
+    expect(opening).toMatchObject({ title: book.title, subtitle: book.subtitle, author: book.authorLabel });
+    expect(opening.glyphs.map((glyph) => glyph.text).join('')).toBe(book.title + book.subtitle + book.authorLabel);
+    expect(first.start).toMatchObject({ blockId: 'p0', offset: 0 });
+    expect(first.text).toBe(book.blocks[0].text.slice(0, first.globalEnd));
+    if (direction === 'tbRl') {
+      const bodyRight = first.insetX + Math.max(...first.context.runs.map((run) => run.frame.x + run.frame.width));
+      expect(bodyRight).toBeLessThan(opening.x);
+    } else {
+      const openingBottom = opening.y + opening.scale * Math.max(...opening.glyphs.map((glyph) => glyph.run.frame.y + glyph.run.frame.height));
+      expect(openingBottom).toBeLessThan(first.insetY);
+    }
+    const next = engine.pageAt(first.end);
+    expect(next.opening).toBeUndefined();
+    expect(next.start).toEqual(first.end);
+    expect(engine.previousAnchor(next)).toEqual(first.start);
+    expect(new PaginationEngine(book, { ...defaultSettings, direction }, 640, 480).pageAt(next.start).start).toEqual(next.start);
+  });
+
   it('turns consecutive two-page spreads without dropping or repeating source text', () => {
     const book = fixture([{ text: '　「見開き。」日本語 12月。\n'.repeat(60) }]);
     const engine = new PaginationEngine(book, { ...defaultSettings, direction }, 320, 370);

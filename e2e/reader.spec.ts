@@ -1,5 +1,86 @@
 import { test, expect } from "@playwright/test";
 
+test("work information precedes the first passage and preserves the saved reading position", async ({
+  page,
+}) => {
+  await page.goto("/#/read/000277");
+  const rendered = page.getByTestId("reader-page");
+  await expect(rendered.locator("svg")).toBeVisible();
+  for (const direction of ["tbRl", "lrTb"]) {
+    if (direction === "lrTb")
+      await page.getByRole("button", { name: "横書きに切り替え" }).click();
+    await expect(page.locator(".reader-loading")).toHaveCount(0);
+    await expect(rendered.locator(".reader-opening")).toHaveText(
+      "駈込み訴え太宰治",
+    );
+    await expect(
+      rendered.getByRole("heading", { name: "駈込み訴え", exact: true }),
+    ).toHaveCount(1);
+    await expect(rendered.locator(".reader-accessible-text")).toContainText(
+      "申し上げます。",
+    );
+    const bounds = await rendered.evaluate((wrapper) => {
+      const opening = wrapper
+        .querySelector(".reader-opening")!
+        .getBoundingClientRect();
+      const body = [...wrapper.querySelectorAll("[data-run]")].map((glyph) =>
+        glyph.getBoundingClientRect(),
+      );
+      const svg = wrapper.querySelector("svg")!.getBoundingClientRect();
+      return {
+        opening: {
+          x: opening.x,
+          y: opening.y,
+          right: opening.right,
+          bottom: opening.bottom,
+        },
+        body: {
+          y: Math.min(...body.map((rect) => rect.y)),
+          right: Math.max(...body.map((rect) => rect.right)),
+        },
+        page: { x: svg.x, y: svg.y, right: svg.right, bottom: svg.bottom },
+      };
+    });
+    expect(bounds.opening.x).toBeGreaterThanOrEqual(bounds.page.x - 2);
+    expect(bounds.opening.y).toBeGreaterThanOrEqual(bounds.page.y - 2);
+    expect(bounds.opening.right).toBeLessThanOrEqual(bounds.page.right + 2);
+    expect(bounds.opening.bottom).toBeLessThanOrEqual(bounds.page.bottom + 2);
+    if (direction === "tbRl")
+      expect(bounds.body.right).toBeLessThan(bounds.opening.x);
+    else expect(bounds.opening.bottom).toBeLessThan(bounds.body.y);
+    const end = await rendered.getAttribute("data-end");
+    await page.getByRole("button", { name: "次のページ" }).click();
+    await expect(rendered).toHaveAttribute("data-start", end!);
+    await expect(rendered.locator(".reader-opening")).toHaveCount(0);
+    const savedAnchor = {
+      blockId: await rendered.getAttribute("data-block"),
+      offset: Number(await rendered.getAttribute("data-offset")),
+    };
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const record = JSON.parse(
+            localStorage.getItem("aozora-stone-reader:v1:record:000277")!,
+          );
+          return {
+            blockId: record?.anchor.blockId,
+            offset: record?.anchor.offset,
+          };
+        }),
+      )
+      .toEqual(savedAnchor);
+    await page.reload();
+    await expect(rendered.locator("svg")).toBeVisible();
+    await expect(rendered).toHaveAttribute("data-start", end!);
+    await expect(rendered.locator(".reader-opening")).toHaveCount(0);
+    await page.getByRole("button", { name: "前のページ" }).click();
+    await expect(rendered).toHaveAttribute("data-start", "0");
+    await expect(rendered.locator(".reader-opening")).toHaveText(
+      "駈込み訴え太宰治",
+    );
+  }
+});
+
 test("the first page does not wait for the initial resize notification", async ({
   page,
 }) => {
@@ -24,9 +105,8 @@ test("browser history and clearing saved data keep reading usable", async ({
   const failures: string[] = [];
   page.on("pageerror", (error) => failures.push(error.message));
   await page.goto("/#/works/000127");
-  await page
-    .getByRole("button", { name: "この作品を読む", exact: true })
-    .click();
+  await expect(page).toHaveURL(/#\/read\/000127$/u);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   const rendered = page.getByTestId("reader-page");
   await expect(rendered.locator("svg")).toBeVisible();
   await page.getByRole("button", { name: "次のページ" }).click();
@@ -108,10 +188,8 @@ test("catalog, vertical/horizontal reading, position restoration, bookmarks and 
   await page.getByRole("searchbox").fill("らしょうもん");
   await expect(page.locator(".book-card")).toHaveCount(1);
   await page.locator(".book-card h3 a").click();
-  await expect(page.getByRole("dialog")).toBeVisible();
-  await page
-    .getByRole("button", { name: "この作品を読む", exact: true })
-    .click();
+  await expect(page).toHaveURL(/#\/read\/000127$/u);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   const rendered = page.getByTestId("reader-page");
   await expect(rendered.locator("svg")).toHaveAttribute(
     "data-stone-direction",
@@ -126,6 +204,8 @@ test("catalog, vertical/horizontal reading, position restoration, bookmarks and 
   await page.getByRole("button", { name: "前のページ" }).click();
   await expect(rendered).toHaveAttribute("data-start", start!);
   await page.getByRole("button", { name: "次のページ" }).click();
+  await expect(rendered).toHaveAttribute("data-start", end!);
+  await expect(page.locator(".reader-loading")).toHaveCount(0);
   const savedBlock = await rendered.getAttribute("data-block");
   const savedOffset = await rendered.getAttribute("data-offset");
   await page.getByRole("button", { name: "このページにしおりを挟む" }).click();

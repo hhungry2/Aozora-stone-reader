@@ -1,5 +1,5 @@
 import { handleStoneCopy, runRangeOfSelection, textOfRunRange, type GlyphElement } from '@non-standardworld/stone-engine.js';
-import { useLayoutEffect, useRef, type ReactNode } from 'react';
+import { memo, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { fontFamilies, type ReaderSettings } from '../types';
 import type { ReaderPageData } from './engine';
 
@@ -84,9 +84,17 @@ export function ReaderPage({ page, settings, className }: { page: ReaderPageData
       }
       handleStoneCopy(event, page.context, image);
     }}>
+    {page.opening && <header className="sr-only reader-opening-info">
+      <h1>{page.opening.title}</h1>
+      {page.opening.subtitle && <p>{page.opening.subtitle}</p>}
+      <p>{page.opening.author}</p>
+    </header>}
     <svg ref={svg} width={page.width} height={page.height} viewBox={`0 0 ${page.width} ${page.height}`}
       aria-hidden="true" focusable="false" data-stone-direction={settings.direction} data-start={page.globalStart} data-end={page.globalEnd}
       style={{ display: 'block', overflow: 'visible', userSelect: 'text', maxWidth: '100%' }}>
+      {page.opening && <g className="reader-opening" transform={`translate(${page.opening.x} ${page.opening.y}) scale(${page.opening.scale})`}>
+        <Glyphs glyphs={page.opening.glyphs} prefix="opening-" />
+      </g>}
       <g transform={`translate(${page.insetX} ${page.insetY})`}>
         {settings.showFrames && <g className="reader-glyph-frames" fill="none" stroke="rgba(0,128,255,0.6)" strokeWidth="0.7" pointerEvents="none" style={{ userSelect: 'none' }}>
           {page.context.runs.filter((run) => !run.isNewline).map((run, index) => <rect key={index}
@@ -106,7 +114,7 @@ export function ReaderPage({ page, settings, className }: { page: ReaderPageData
   </div>;
 }
 
-export function ReaderPages({ pages, settings, spread }: { pages: ReaderPageData[]; settings: ReaderSettings; spread: boolean }) {
+export const ReaderPages = memo(function ReaderPages({ pages, settings, spread }: { pages: ReaderPageData[]; settings: ReaderSettings; spread: boolean }) {
   const root = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const container = root.current;
@@ -138,4 +146,4 @@ export function ReaderPages({ pages, settings, spread }: { pages: ReaderPageData
     {pages.map((page, index) => <ReaderPage key={index} page={page} settings={settings} className="reader-leaf" />)}
     {spread && pages.length === 1 && <div className="reader-leaf reader-blank-page" aria-hidden="true" style={{ width: pages[0].width, height: pages[0].height }} />}
   </div>;
-}
+});
