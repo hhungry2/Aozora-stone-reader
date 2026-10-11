@@ -1,10 +1,6 @@
-import {
-  FixedMeasurer,
-  getSharedCanvasMeasurer,
-} from "@non-standardworld/stone-engine.js";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Anchor, Book, ReaderSettings } from "../types";
-import { PaginationEngine, type ReaderPageData } from "./engine";
+import type { PaginationEngine, ReaderPageData } from "./engine";
 import { loadReaderFont } from "./fonts";
 import { preloadPages, type PreloadProgress } from "./preload";
 
@@ -15,6 +11,7 @@ interface Options {
   height: number;
   anchor: Anchor | null;
   pageCount?: 1 | 2;
+  enabled?: boolean;
 }
 interface Result {
   page: ReaderPageData | null;
@@ -29,6 +26,32 @@ interface Result {
   preload: PreloadProgress | null;
 }
 
+interface StoneRuntime {
+  PaginationEngine: typeof import("./engine").PaginationEngine;
+  FixedMeasurer: typeof import("@non-standardworld/stone-engine.js").FixedMeasurer;
+  getSharedCanvasMeasurer: typeof import("@non-standardworld/stone-engine.js").getSharedCanvasMeasurer;
+}
+
+interface PaginationState {
+  engine: PaginationEngine | null;
+  anchorKey: string;
+  retryRevision: number;
+  pageCount: number;
+  pages: ReaderPageData[];
+  previousAnchor: Anchor | null;
+  error: string | null;
+}
+
+const emptyPagination: PaginationState = {
+  engine: null,
+  anchorKey: "",
+  retryRevision: -1,
+  pageCount: 1,
+  pages: [],
+  previousAnchor: null,
+  error: null,
+};
+
 export function usePagination({
   book,
   settings,
@@ -36,14 +59,69 @@ export function usePagination({
   height,
   anchor,
   pageCount = 1,
+  enabled = true,
 }: Options): Result {
   const [fontRevision, setFontRevision] = useState(0);
   const [retryRevision, setRetryRevision] = useState(0);
+  const [runtimeState, setRuntimeState] = useState<{
+    runtime: StoneRuntime | null;
+    error: string | null;
+    retryRevision: number;
+  }>({ runtime: null, error: null, retryRevision: -1 });
   const retry = useCallback(
     () => setRetryRevision((revision) => revision + 1),
     [],
   );
   useEffect(() => {
+    if (!enabled) {
+      setRuntimeState({ runtime: null, error: null, retryRevision: -1 });
+      return;
+    }
+    let active = true;
+    setRuntimeState({ runtime: null, error: null, retryRevision });
+    // A reader opened in CSS mode must not download or initialize Stone.
+    void Promise.all([
+      import("./engine"),
+      import("@non-standardworld/stone-engine.js"),
+    ]).then(
+      ([engineModule, stoneModule]) => {
+        if (!active) return;
+        setRuntimeState({
+          runtime: {
+            PaginationEngine: engineModule.PaginationEngine,
+            FixedMeasurer: stoneModule.FixedMeasurer,
+            getSharedCanvasMeasurer: stoneModule.getSharedCanvasMeasurer,
+          },
+          error: null,
+          retryRevision,
+        });
+      },
+      (error: unknown) => {
+        if (!active) return;
+        setRuntimeState({
+          runtime: null,
+          error:
+            error instanceof Error
+              ? error.message
+              : "組版ライブラリを読み込めませんでした。",
+          retryRevision,
+        });
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [enabled, retryRevision]);
+  const runtime =
+    enabled && runtimeState.retryRevision === retryRevision
+      ? runtimeState.runtime
+      : null;
+  const runtimeError =
+    enabled && runtimeState.retryRevision === retryRevision
+      ? runtimeState.error
+      : null;
+  useEffect(() => {
+    if (!enabled || !runtime) return;
     if (settings.font === "serif" || settings.font === "sans") return;
     let active = true;
     const sample = [
@@ -59,19 +137,20 @@ export function usePagination({
       .slice(0, 500);
     void loadReaderFont(settings.font, sample).then(() => {
       if (active) {
-        getSharedCanvasMeasurer()?.invalidate();
+        runtime.getSharedCanvasMeasurer()?.invalidate();
         setFontRevision((revision) => revision + 1);
       }
     });
     return () => {
       active = false;
     };
-  }, [book, settings.font]);
+  }, [enabled, runtime, book, settings.font]);
   useEffect(() => {
+    if (!enabled || !runtime) return;
     let active = true;
     const update = () => {
       if (!active) return;
-      getSharedCanvasMeasurer()?.invalidate();
+      runtime.getSharedCanvasMeasurer()?.invalidate();
       setFontRevision((revision) => revision + 1);
     };
     void document.fonts?.ready.then(update);
@@ -80,56 +159,59 @@ export function usePagination({
       active = false;
       document.fonts?.removeEventListener("loadingdone", update);
     };
-  }, []);
-  const engine = useMemo(
-    () =>
-      new PaginationEngine(
-        book,
-        settings,
-        width,
-        height,
-        getSharedCanvasMeasurer() ?? new FixedMeasurer(),
-      ),
-    [
-      book,
-      settings.direction,
-      settings.fontSize,
-      settings.lineHeight,
-      settings.font,
-      settings.latinFont,
-      settings.latinScale,
-      settings.punctuationMode,
-      settings.textAlign,
-      settings.directionAlign,
-      settings.kinsoku,
-      settings.dividesByWords,
-      settings.allowsTateChuYoko,
-      settings.ruby,
-      settings.paginationMode,
-      width,
-      height,
-      fontRevision,
-    ],
-  );
-  const [state, setState] = useState<{
-    engine: PaginationEngine | null;
-    anchorKey: string;
-    retryRevision: number;
-    pageCount: number;
-    pages: ReaderPageData[];
-    previousAnchor: Anchor | null;
-    error: string | null;
-  }>({
-    engine: null,
-    anchorKey: "",
-    retryRevision: -1,
-    pageCount: 1,
-    pages: [],
-    previousAnchor: null,
-    error: null,
-  });
+  }, [enabled, runtime]);
+  const { engine, error: engineError } = useMemo(() => {
+    if (!enabled || !runtime) return { engine: null, error: null };
+    try {
+      return {
+        engine: new runtime.PaginationEngine(
+          book,
+          settings,
+          width,
+          height,
+          runtime.getSharedCanvasMeasurer() ?? new runtime.FixedMeasurer(),
+        ),
+        error: null,
+      };
+    } catch (error) {
+      return {
+        engine: null,
+        error:
+          error instanceof Error
+            ? error.message
+            : "本文を組版できませんでした。",
+      };
+    }
+  }, [
+    enabled,
+    runtime,
+    book,
+    settings.direction,
+    settings.fontSize,
+    settings.lineHeight,
+    settings.font,
+    settings.latinFont,
+    settings.latinScale,
+    settings.punctuationMode,
+    settings.textAlign,
+    settings.directionAlign,
+    settings.kinsoku,
+    settings.dividesByWords,
+    settings.allowsTateChuYoko,
+    settings.ruby,
+    settings.paginationMode,
+    width,
+    height,
+    fontRevision,
+  ]);
+  const [state, setState] = useState<PaginationState>(emptyPagination);
   const anchorKey = `${anchor?.blockId ?? ""}:${anchor?.offset ?? 0}`;
   useEffect(() => {
+    if (!enabled || !engine) {
+      // Drop the old engine and its page caches when leaving Stone mode.
+      setState(emptyPagination);
+      return;
+    }
     if (width < 80 || height < 80) return;
     const task = window.setTimeout(() => {
       try {
@@ -160,21 +242,30 @@ export function usePagination({
       }
     }, 0);
     return () => window.clearTimeout(task);
-  }, [engine, anchorKey, retryRevision, width, height, pageCount]);
+  }, [enabled, engine, anchorKey, retryRevision, width, height, pageCount]);
+  const error =
+    runtimeError ??
+    engineError ??
+    (state.engine === engine ? state.error : null);
   const loading =
-    state.engine !== engine ||
-    state.anchorKey !== anchorKey ||
-    state.retryRevision !== retryRevision ||
-    state.pageCount !== pageCount;
-  const page = state.pages[0] ?? null;
-  const last = state.pages.at(-1);
+    enabled &&
+    !runtimeError &&
+    !engineError &&
+    (!engine ||
+      state.engine !== engine ||
+      state.anchorKey !== anchorKey ||
+      state.retryRevision !== retryRevision ||
+      state.pageCount !== pageCount);
+  const pages = engine ? state.pages : [];
+  const page = pages[0] ?? null;
+  const last = pages.at(-1);
   const [preparation, setPreparation] = useState<{
     engine: PaginationEngine;
     anchorKey: string;
     progress: PreloadProgress;
   } | null>(null);
   useEffect(() => {
-    if (loading || state.error || !last) {
+    if (!enabled || !engine || loading || error || !last) {
       // Release the previous full-book cache even if the new layout fails.
       setPreparation(null);
       return;
@@ -188,28 +279,34 @@ export function usePagination({
       },
     );
   }, [
+    enabled,
     engine,
     anchorKey,
     loading,
-    state.error,
+    error,
     last,
     settings.paginationMode,
     retryRevision,
   ]);
   const preload =
-    preparation?.engine === engine && preparation.anchorKey === anchorKey
+    enabled &&
+    engine &&
+    preparation?.engine === engine &&
+    preparation.anchorKey === anchorKey
       ? preparation.progress
       : null;
-  const isEnd = Boolean(last && last.globalEnd >= engine.index.text.length);
+  const isEnd = Boolean(
+    engine && last && last.globalEnd >= engine.index.text.length,
+  );
   return {
     page,
-    pages: state.pages,
+    pages,
     loading,
-    error: state.error,
+    error: enabled ? error : null,
     nextAnchor: last && !isEnd ? last.end : null,
-    previousAnchor: state.previousAnchor,
+    previousAnchor: engine ? state.previousAnchor : null,
     progress:
-      page && engine.index.text.length
+      page && engine && engine.index.text.length
         ? page.globalStart / engine.index.text.length
         : 0,
     isEnd,

@@ -1,0 +1,117 @@
+.css-reader {
+  position: relative;
+  box-sizing: border-box;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  scroll-behavior: auto;
+  overflow-anchor: none;
+  color: currentColor;
+  direction: ltr;
+  user-select: text;
+  touch-action: auto;
+  text-orientation: mixed;
+  overflow-wrap: anywhere;
+}
+.css-reader::-webkit-scrollbar {
+  display: none;
+}
+.css-reader-document {
+  box-sizing: border-box;
+  padding: 20px;
+  white-space: pre-wrap;
+  font: inherit;
+  color: inherit;
+}
+.css-reader-vertical .css-reader-document {
+  height: 100%;
+  min-width: 100%;
+  width: max-content;
+}
+.css-reader-horizontal .css-reader-document {
+  width: 100%;
+  min-height: 100%;
+  height: max-content;
+}
+.css-reader-document p,
+.css-reader-document figure,
+.css-reader-document .css-reader-heading {
+  box-sizing: border-box;
+  margin: 0;
+  margin-block-end: 0.7em;
+  padding: 0;
+  font: inherit;
+  white-space: inherit;
+  color: inherit;
+}
+.css-reader-document p {
+  min-block-size: 1em;
+}
+.css-reader-document .css-reader-heading {
+  font-weight: 700;
+  margin-block-start: 0.8em;
+  margin-block-end: 0.8em;
+}
+.css-reader-opening {
+  margin-block-end: 2em;
+  padding-block: 0.2em;
+}
+.css-reader-opening h1 {
+  margin: 0;
+  margin-block-end: 0.6em;
+  font-family: inherit;
+  font-size: 1.25em;
+  font-weight: 700;
+  line-height: 1.6;
+  color: inherit;
+}
+.css-reader-document ruby {
+  ruby-position: over;
+}
+.css-reader-document rt {
+  font-size: 0.5em;
+  line-height: 1;
+  user-select: none;
+}
+.css-reader-emphasis {
+  text-emphasis: filled sesame;
+  -webkit-text-emphasis: filled sesame;
+  text-emphasis-position: over right;
+}
+.css-reader-latin {
+  font-family: var(--css-reader-latin-font);
+  font-size: calc(1em * var(--css-reader-latin-scale));
+}
+.css-reader-vertical .css-reader-tcy {
+  text-combine-upright: all;
+}
+.css-reader-inline-image {
+  display: inline-block;
+  inline-size: 1em;
+  block-size: 1em;
+  line-height: 1;
+  vertical-align: middle;
+}
+.css-reader-inline-image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.css-reader-image-block {
+  display: block;
+  max-inline-size: 100%;
+}
+.css-reader-image-block img {
+  display: block;
+  max-width: min(var(--css-reader-image-width), 600px);
+  max-height: min(var(--css-reader-image-height), 600px);
+  object-fit: contain;
+}
+.css-reader-image-block figcaption {
+  font: inherit;
+  font-size: 0.85em;
+}
+.css-reader-note {
+  opacity: 0.8;
+}

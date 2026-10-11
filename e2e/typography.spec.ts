@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import catalog from "../public/data/catalog.json" with { type: "json" };
 
-test("the updated site name fits the library and the removed headings stay absent", async ({
+test("the English site name leads its Japanese description and fits the library", async ({
   page,
 }) => {
   await page.goto("/");
@@ -9,9 +9,23 @@ test("the updated site name fits the library and the removed headings stay absen
     Math.min(40, catalog.length),
   );
   await expect(page.locator(".site-header .brand strong")).toHaveText(
+    "Aozora Stone Reader",
+  );
+  await expect(page.locator(".site-header .brand small")).toHaveText(
     "縦・横表示対応の青空文庫リーダー",
   );
-  await expect(page).toHaveTitle("縦・横表示対応の青空文庫リーダー");
+  await expect(page).toHaveTitle(/Aozora Stone Reader/u);
+  const brandFontSizes = await page
+    .locator(".site-header .brand")
+    .evaluate((brand) => ({
+      name: Number.parseFloat(
+        getComputedStyle(brand.querySelector("strong")!).fontSize,
+      ),
+      description: Number.parseFloat(
+        getComputedStyle(brand.querySelector("small")!).fontSize,
+      ),
+    }));
+  expect(brandFontSizes.name).toBeGreaterThan(brandFontSizes.description);
   await expect(page.getByText("一冊と、", { exact: false })).toHaveCount(0);
   await expect(page.getByText("静かな時間を。", { exact: false })).toHaveCount(
     0,

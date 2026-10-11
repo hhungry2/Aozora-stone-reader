@@ -1,5 +1,7 @@
 import {
   Component,
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -42,7 +44,12 @@ import {
 import { fetchJson } from "./lib/data";
 import { displayTitle } from "./lib/titles";
 import { readerStorage } from "./lib/state";
-import { ReaderPages, usePagination } from "./reader";
+import { usePagination } from "./reader/usePagination";
+import {
+  CssReader,
+  type CssReaderHandle,
+  type CssReaderLocation,
+} from "./reader/CssReader";
 import {
   type Anchor,
   type Book,
@@ -53,6 +60,10 @@ import {
   japaneseFontOptions,
   latinFontOptions,
 } from "./types";
+
+const ReaderPages = lazy(async () => ({
+  default: (await import("./reader/ReaderPage")).ReaderPages,
+}));
 
 const assetUrl = (path: string) =>
   new URL(path, new URL(import.meta.env.BASE_URL, document.baseURI)).href;
@@ -106,15 +117,15 @@ function Brand({ compact = false }: { compact?: boolean }) {
     <a
       className={`brand ${compact ? "compact" : ""}`}
       href="#/"
-      aria-label="縦・横表示対応の青空文庫リーダー 本棚へ"
+      aria-label="Aozora Stone Reader 本棚へ"
     >
       <span className="brand-mark" aria-hidden="true">
         <i />
         <i />
       </span>
       <span>
-        <strong>縦・横表示対応の青空文庫リーダー</strong>
-        <small>AOZORA STONE READER</small>
+        <strong>Aozora Stone Reader</strong>
+        <small>縦・横表示対応の青空文庫リーダー</small>
       </span>
     </a>
   );
@@ -585,12 +596,36 @@ function SettingsPanel({
     key: K,
     value: ReaderSettings[K],
   ) => onChange({ ...settings, [key]: value });
+  const cssMode = settings.renderingMode === "css";
   return (
     <div className="settings-content">
+      <div className="setting-group">
+        <label htmlFor="rendering-mode">表示エンジン</label>
+        <select
+          id="rendering-mode"
+          value={settings.renderingMode}
+          onChange={(event) =>
+            set(
+              "renderingMode",
+              event.target.value as ReaderSettings["renderingMode"],
+            )
+          }
+          aria-describedby="rendering-mode-note"
+        >
+          <option value="stone">Stone（stone-engine.js）</option>
+          <option value="css">CSS（ライブラリ未使用）</option>
+        </select>
+        <p id="rendering-mode-note" className="fine-print">
+          {cssMode
+            ? "ブラウザ標準の writing-mode と HTML で表示します。ページ送りは画面単位です。Stone 専用の設定は適用しません。"
+            : "stone-engine.js で組版し、SVG で表示します。CSS モードに切り替えて同じ本文を比較できます。"}
+        </p>
+      </div>
       <div className="setting-group">
         <label htmlFor="page-layout">ページ表示</label>
         <select
           id="page-layout"
+          disabled={cssMode}
           value={settings.pageLayout}
           onChange={(event) =>
             set(
@@ -607,6 +642,7 @@ function SettingsPanel({
         <label htmlFor="pagination-mode">ページの準備</label>
         <select
           id="pagination-mode"
+          disabled={cssMode}
           value={settings.paginationMode}
           onChange={(event) =>
             set(
@@ -621,17 +657,20 @@ function SettingsPanel({
           <option value="all">全ページ組版</option>
         </select>
         <p id="pagination-mode-note" className="fine-print">
-          {settings.paginationMode === "all"
-            ? "読書を続けながら作品全体を準備します。長い作品ほど時間とメモリを使います。"
-            : settings.paginationMode === "batch"
-              ? "現在位置から先の10ページを準備し、読み進めるたびに補充します。"
-              : "表示するページと次の1ページを準備します。"}
+          {cssMode
+            ? "CSS モードでは本文全体をブラウザが配置します。見開きと先読みは Stone モードで利用できます。"
+            : settings.paginationMode === "all"
+              ? "読書を続けながら作品全体を準備します。長い作品ほど時間とメモリを使います。"
+              : settings.paginationMode === "batch"
+                ? "現在位置から先の10ページを準備し、読み進めるたびに補充します。"
+                : "表示するページと次の1ページを準備します。"}
         </p>
       </div>
       <div className="setting-group">
         <label htmlFor="punctuation-mode">約物</label>
         <select
           id="punctuation-mode"
+          disabled={cssMode}
           value={settings.punctuationMode}
           onChange={(event) =>
             set(
@@ -668,6 +707,7 @@ function SettingsPanel({
           <label htmlFor="direction-align">行の寄せ</label>
           <select
             id="direction-align"
+            disabled={cssMode}
             value={settings.directionAlign}
             onChange={(event) =>
               set(
@@ -736,6 +776,7 @@ function SettingsPanel({
           <label key={key}>
             <input
               type="checkbox"
+              disabled={cssMode && key === "showFrames"}
               checked={settings[key]}
               onChange={(event) => set(key, event.target.checked)}
             />
@@ -1074,7 +1115,7 @@ export default function App() {
         )
       ) : (
         <main id="main-content" tabIndex={-1} className="library-main">
-          <h1 className="sr-only">縦・横表示対応の青空文庫リーダー</h1>
+          <h1 className="sr-only">Aozora Stone Reader</h1>
           <section className="hero">
             <div className="hero-copy">
               <span className="eyebrow">
@@ -1520,13 +1561,35 @@ function ReadingView({
   const info = useRef<HTMLDivElement>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [size, setSize] = useState({ width: 0, height: 0 });
+  const cssMode = settings.renderingMode === "css";
+  const cssReader = useRef<CssReaderHandle>(null);
+  const [cssLocation, setCssLocation] = useState<CssReaderLocation | null>(
+    null,
+  );
+  const onCssLocationChange = useCallback((location: CssReaderLocation) => {
+    setCssLocation(location);
+    if (location.page) {
+      const start = location.page.start;
+      setAnchor((current) =>
+        current.blockId === start.blockId && current.offset === start.offset
+          ? current
+          : start,
+      );
+    }
+  }, []);
+  useEffect(() => {
+    if (!cssMode) setCssLocation(null);
+  }, [cssMode]);
   const [landscape, setLandscape] = useState(
     () =>
       window.matchMedia("(min-width: 800px) and (orientation: landscape)")
         .matches,
   );
   const spread =
-    settings.pageLayout === "spread" && landscape && size.width >= 600;
+    !cssMode &&
+    settings.pageLayout === "spread" &&
+    landscape &&
+    size.width >= 600;
   const pageCount = spread ? 2 : 1;
   const pageWidth = spread ? Math.floor((size.width - 24) / 2) : size.width;
   const viewport = useRef<HTMLDivElement>(null);
@@ -1534,25 +1597,36 @@ function ReadingView({
   const wheel = useRef({ distance: 0, lastEventAt: 0, lastTurnAt: -Infinity });
   const lastSaved = useRef("");
   const migratedBookmarks = useRef(false);
-  const {
-    page,
-    pages,
-    loading,
-    error,
-    nextAnchor,
-    previousAnchor,
-    progress,
-    isEnd,
-    preload,
-    retry: retryLayout,
-  } = usePagination({
+  const stone = usePagination({
     book,
     settings,
     width: pageWidth,
     height: size.height,
     anchor,
     pageCount,
+    enabled: !cssMode,
   });
+  const page = cssMode ? (cssLocation?.page ?? null) : stone.page;
+  const pages = stone.pages;
+  const loading = cssMode ? (cssLocation?.loading ?? true) : stone.loading;
+  const error = cssMode ? (cssLocation?.error ?? null) : stone.error;
+  const nextAnchor = cssMode
+    ? cssLocation?.hasNext
+      ? (page?.end ?? null)
+      : null
+    : stone.nextAnchor;
+  const previousAnchor = cssMode
+    ? cssLocation?.hasPrevious
+      ? (page?.start ?? null)
+      : null
+    : stone.previousAnchor;
+  const progress = cssMode ? (cssLocation?.progress ?? 0) : stone.progress;
+  const isEnd = cssMode ? (cssLocation?.isEnd ?? false) : stone.isEnd;
+  const preload = stone.preload;
+  const retryLayout = useCallback(() => {
+    if (cssMode) cssReader.current?.retry();
+    else stone.retry();
+  }, [cssMode, stone.retry]);
   const record = readerStorage.getRecord(book.id);
   const bookmarks = record?.bookmarks || [];
   const vertical = settings.direction === "tbRl";
@@ -1632,10 +1706,14 @@ function ReadingView({
   const advance = useCallback(
     (next: boolean) => {
       if (loading || panel) return;
+      if (cssMode) {
+        cssReader.current?.advance(next);
+        return;
+      }
       const target = next ? nextAnchor : previousAnchor;
       if (target) setAnchor(target);
     },
-    [loading, panel, nextAnchor, previousAnchor],
+    [loading, panel, cssMode, nextAnchor, previousAnchor],
   );
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -1816,6 +1894,7 @@ function ReadingView({
     <div
       className={`reader-shell ${vertical ? "vertical" : "horizontal"}`}
       data-testid="reader"
+      data-engine={settings.renderingMode}
     >
       <header className="reader-header">
         <a href="#/" className="reader-back" aria-label="本棚へ">
@@ -1831,6 +1910,7 @@ function ReadingView({
             className="direction-toggle page-layout-toggle"
             role="group"
             aria-label="ページ表示"
+            hidden={cssMode}
           >
             <button
               aria-label="1ページ表示に切り替え"
@@ -1935,10 +2015,12 @@ function ReadingView({
             ref={viewport}
             data-testid="reader-viewport"
             onPointerDown={(event) => {
+              if (cssMode) return;
               if (event.pointerType === "touch")
                 pointer.current = { x: event.clientX, y: event.clientY };
             }}
             onPointerUp={(event) => {
+              if (cssMode) return;
               if (!pointer.current || window.getSelection()?.toString()) {
                 pointer.current = null;
                 return;
@@ -1953,22 +2035,48 @@ function ReadingView({
               pointer.current = null;
             }}
           >
-            {page && (
+            {cssMode ? (
               <div
                 className="reader-page-wrap"
                 data-testid="reader-page"
-                data-block={page.start.blockId}
-                data-offset={page.start.offset}
-                data-start={page.globalStart}
-                data-end={pages[pages.length - 1].globalEnd}
-                data-layout={spread ? "spread" : "single"}
+                data-block={page?.start.blockId}
+                data-offset={page?.start.offset}
+                data-start={page?.globalStart}
+                data-end={page?.globalEnd}
+                data-layout="single"
               >
-                <ReaderPages
-                  pages={pages}
+                <CssReader
+                  ref={cssReader}
+                  book={book}
                   settings={settings}
-                  spread={spread}
+                  width={size.width}
+                  height={size.height}
+                  anchor={anchor}
+                  onLocationChange={onCssLocationChange}
                 />
               </div>
+            ) : (
+              page && (
+                <div
+                  className="reader-page-wrap"
+                  data-testid="reader-page"
+                  data-block={page.start.blockId}
+                  data-offset={page.start.offset}
+                  data-start={page.globalStart}
+                  data-end={pages[pages.length - 1].globalEnd}
+                  data-layout={spread ? "spread" : "single"}
+                >
+                  <Suspense
+                    fallback={<span role="status">本文を読み込んでいます</span>}
+                  >
+                    <ReaderPages
+                      pages={pages}
+                      settings={settings}
+                      spread={spread}
+                    />
+                  </Suspense>
+                </div>
+              )
             )}
             {loading && (
               <div
@@ -1999,6 +2107,11 @@ function ReadingView({
           </div>
           <div className="reader-page-bottom">
             <span className="reader-end">
+              {cssMode && (
+                <span className="reader-engine-status">
+                  CSS · ライブラリ未使用
+                </span>
+              )}
               {isEnd ? (
                 <>
                   <Check size={14} />
@@ -2007,10 +2120,10 @@ function ReadingView({
                     底本・制作情報
                   </button>
                 </>
-              ) : settings.paginationMode === "on-demand" ? (
+              ) : !cssMode && settings.paginationMode === "on-demand" ? (
                 "言葉のつづきへ。"
               ) : null}
-              {settings.paginationMode !== "on-demand" && (
+              {!cssMode && settings.paginationMode !== "on-demand" && (
                 <span
                   className="reader-preload-status"
                   data-testid="pagination-preload"

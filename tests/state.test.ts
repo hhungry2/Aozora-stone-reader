@@ -23,6 +23,43 @@ const record = (date = '2026-10-09T10:00:00.000Z'): ReadingRecord => ({
 });
 
 describe('reader state persistence', () => {
+  it('uses stone rendering by default for a new reader', () => {
+    const state = createReaderStorage(new MemoryStorage());
+    expect(state.getSettings().renderingMode).toBe('stone');
+    expect(state.getStatus().corrupted).toBe(false);
+  });
+
+  it('adds stone rendering to earlier settings without resetting preferences or reporting corruption', () => {
+    const disk = new MemoryStorage();
+    const { renderingMode: _renderingMode, ...earlierSettings } = defaultSettings;
+    disk.setItem(`${STORAGE_PREFIX}settings`, JSON.stringify({ ...earlierSettings, settingsVersion: 2,
+      direction: 'lrTb', fontSize: 28, lineHeight: 2.2, theme: 'dark' }));
+    const state = createReaderStorage(disk);
+    expect(state.getSettings()).toEqual({ ...defaultSettings, direction: 'lrTb', fontSize: 28,
+      lineHeight: 2.2, theme: 'dark' });
+    expect(state.getStatus().corrupted).toBe(false);
+  });
+
+  it.each(['stone', 'css'] as const)('persists the %s renderer across sessions', (renderingMode) => {
+    const disk = new MemoryStorage();
+    const settings = { ...defaultSettings, renderingMode, direction: 'lrTb' as const,
+      fontSize: 28, theme: 'dark' as const };
+    expect(createReaderStorage(disk).saveSettings(settings)).toBe(true);
+    const reopened = createReaderStorage(disk);
+    expect(reopened.getSettings()).toEqual(settings);
+    expect(reopened.getStatus().corrupted).toBe(false);
+  });
+
+  it('resets only an invalid renderer while retaining valid reader preferences', () => {
+    const disk = new MemoryStorage();
+    disk.setItem(`${STORAGE_PREFIX}settings`, JSON.stringify({ ...defaultSettings, settingsVersion: 2,
+      renderingMode: 'unknown', direction: 'lrTb', fontSize: 28, theme: 'dark' }));
+    const state = createReaderStorage(disk);
+    expect(state.getSettings()).toEqual({ ...defaultSettings, direction: 'lrTb', fontSize: 28,
+      theme: 'dark' });
+    expect(state.getStatus().corrupted).toBe(true);
+  });
+
   it('adds typography defaults to an earlier six-field settings record', () => {
     const disk = new MemoryStorage();
     disk.setItem(`${STORAGE_PREFIX}settings`, JSON.stringify({ direction: 'lrTb', fontSize: 28, lineHeight: 2.2, font: 'sans', theme: 'dark', ruby: false }));

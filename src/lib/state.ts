@@ -92,6 +92,7 @@ export function createReaderStorage(storage: StorageLike | null = browserStorage
       typeof input === 'number' && Number.isFinite(input) && input >= min && input <= max &&
       Math.abs((input - min) / step - Math.round((input - min) / step)) < 0.00001;
     const valid: Record<keyof ReaderSettings, boolean> = {
+      renderingMode: value.renderingMode === 'stone' || value.renderingMode === 'css',
       direction: value.direction === 'tbRl' || value.direction === 'lrTb',
       pageLayout: value.pageLayout === 'single' || value.pageLayout === 'spread',
       paginationMode: ['on-demand', 'batch', 'all'].includes(value.paginationMode as string),
@@ -112,7 +113,7 @@ export function createReaderStorage(storage: StorageLike | null = browserStorage
     };
     for (const key of Object.keys(valid) as (keyof ReaderSettings)[]) {
       if (valid[key]) Object.assign(result, { [key]: key === 'lineHeight' ? lineHeight : value[key] });
-      // Earlier releases did not save these additional typography preferences.
+      // Earlier releases did not save the renderer or additional typography preferences.
       else if (Object.hasOwn(value, key) || ['direction', 'fontSize', 'lineHeight', 'font', 'theme', 'ruby'].includes(key)) status.corrupted = true;
     }
     return result;

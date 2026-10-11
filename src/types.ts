@@ -128,6 +128,7 @@ export const latinFontOptions = [
 ] as const;
 
 export interface ReaderSettings {
+  renderingMode: "stone" | "css";
   direction: "tbRl" | "lrTb";
   pageLayout: "single" | "spread";
   paginationMode: "on-demand" | "batch" | "all";
@@ -163,6 +164,7 @@ export interface ReadingRecord {
 }
 
 export const defaultSettings: ReaderSettings = {
+  renderingMode: "stone",
   direction: "tbRl",
   pageLayout: "single",
   paginationMode: "on-demand",
