@@ -75,7 +75,7 @@ describe('reader state persistence', () => {
       pageLayout: 'spread' as const,
       paginationMode: 'all' as const,
       textAlign: 'justify' as const, directionAlign: 'end' as const,
-      kinsoku: false, dividesByWords: false, allowsTateChuYoko: false, showFrames: true };
+      kinsoku: false, dividesByWords: false, allowsTateChuYoko: false, showFrames: false };
     expect(createReaderStorage(disk).saveSettings(settings)).toBe(true);
     const reopened = createReaderStorage(disk);
     expect(reopened.getSettings()).toEqual(settings);

@@ -173,9 +173,11 @@ test("all playground typography settings reflow at the same anchor and persist",
   ).toBeChecked();
   await expect(
     settingsPanel.getByLabel("文字の枠を表示", { exact: true }),
-  ).not.toBeChecked();
+  ).toBeChecked();
   await expect(page.locator(".reader-loading")).toHaveCount(0);
-  await expect(rendered.locator(".reader-glyph-frames")).toHaveCount(0);
+  expect(
+    await rendered.locator(".reader-glyph-frames rect").count(),
+  ).toBeGreaterThan(10);
   await expect(rendered).toHaveAttribute("data-block", savedBlock!);
   await expect(rendered).toHaveAttribute("data-offset", savedOffset!);
   await page

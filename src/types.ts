@@ -179,7 +179,7 @@ export const defaultSettings: ReaderSettings = {
   kinsoku: true,
   dividesByWords: true,
   allowsTateChuYoko: true,
-  showFrames: false,
+  showFrames: true,
   theme: "paper",
   ruby: true,
 };
