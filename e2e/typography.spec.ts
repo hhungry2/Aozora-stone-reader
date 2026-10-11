@@ -5,7 +5,9 @@ test("the updated site name fits the library and the removed headings stay absen
   page,
 }) => {
   await page.goto("/");
-  await expect(page.locator(".book-card")).toHaveCount(catalog.length);
+  await expect(page.locator(".book-card")).toHaveCount(
+    Math.min(40, catalog.length),
+  );
   await expect(page.locator(".site-header .brand strong")).toHaveText(
     "縦・横表示対応の青空文庫リーダー",
   );

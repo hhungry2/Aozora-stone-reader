@@ -3,6 +3,8 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
+  useDeferredValue,
   useRef,
   useState,
   type ReactNode,
@@ -32,7 +34,8 @@ import {
   X,
 } from "lucide-react";
 import { anchorProgress, createAnchor, restoreAnchor } from "./lib/anchors";
-import { filterCatalog } from "./lib/catalog";
+import { CATALOG_PAGE_SIZE, createCatalogIndex } from "./lib/catalog";
+import { fetchJson } from "./lib/data";
 import { readerStorage } from "./lib/state";
 import { ReaderPages, usePagination } from "./reader";
 import {
@@ -182,10 +185,12 @@ function About({
   onClose,
   onClear,
   bookCount,
+  sourceOnlyCount,
 }: {
   onClose: () => void;
   onClear: () => void;
   bookCount: number;
+  sourceOnlyCount: number;
 }) {
   const [confirm, setConfirm] = useState(false);
   return (
@@ -197,9 +202,16 @@ function About({
           stone-engine.js を使った、小さなブラウザの文庫です。
         </p>
         <p>
-          著作権が消滅した{bookCount}
-          作品を収録しています。文字の大きさや行間を整えて、あなたに合う読み方を見つけてください。
+          著作権が消滅した{bookCount.toLocaleString()}
+          作品を検索できます。文字の大きさや行間を整えて、あなたに合う読み方を見つけてください。
         </p>
+        {sourceOnlyCount > 0 && (
+          <p>
+            本文を読める作品は{(bookCount - sourceOnlyCount).toLocaleString()}
+            作品です。 外部サイト等で提供される{sourceOnlyCount}
+            作品は、公式図書カードへ案内します。
+          </p>
+        )}
         <h3>作品の出典</h3>
         <p>
           作品本文・書誌情報は青空文庫から取得し、表示用に形式を変換しています。底本・入力者・校正者等は各作品の「作品情報」に掲載しています。このアプリは青空文庫の公式サービスではありません。
@@ -762,6 +774,8 @@ export default function App() {
   const [sort, setSort] = useState<"title" | "author">("title");
   const [filter, setFilter] = useState("all");
   const [author, setAuthor] = useState("");
+  const [shelfPage, setShelfPage] = useState(1);
+  const deferredQuery = useDeferredValue(query);
   const searchRef = useRef<HTMLInputElement>(null);
   const [recordVersion, setRecordVersion] = useState(0);
   const [toast, setToast] = useState("");
@@ -801,20 +815,21 @@ export default function App() {
   useEffect(() => {
     const abort = new AbortController();
     setCatalogError(false);
-    fetch(assetUrl("data/catalog.json"), { signal: abort.signal })
-      .then((r) => {
-        if (!r.ok) throw new Error();
-        return r.json();
-      })
+    fetchJson<CatalogEntry[]>(assetUrl("data/catalog.json.gz"), abort.signal)
       .then(setCatalog)
       .catch((e) => {
         if (e.name !== "AbortError") setCatalogError(true);
       });
     return () => abort.abort();
   }, [retry]);
-  const selected = catalog.find((b) => b.id === route.id);
+  const catalogById = useMemo(
+    () => new Map(catalog.map((entry) => [entry.id, entry])),
+    [catalog],
+  );
+  const catalogIndex = useMemo(() => createCatalogIndex(catalog), [catalog]);
+  const selected = catalogById.get(route.id);
   useEffect(() => {
-    if (!selected || route.screen !== "read") return;
+    if (!selected || !selected.dataPath || route.screen !== "read") return;
     const abort = new AbortController();
     setBook(null);
     setBookError("");
@@ -822,19 +837,20 @@ export default function App() {
       setBook(bookCache.current.get(selected.id)!);
       return;
     }
-    fetch(assetUrl(selected.dataPath), { signal: abort.signal })
-      .then((r) => {
-        if (!r.ok) throw new Error();
-        return r.json();
-      })
+    fetchJson<Book>(assetUrl(selected.dataPath), abort.signal)
       .then((data: Book) => {
+        if (abort.signal.aborted) return;
         if (
+          data.id !== selected.id ||
+          data.contentVersion !== selected.contentVersion ||
           data.schemaVersion !== 1 ||
           !Array.isArray(data.blocks) ||
           !data.blocks.length
         )
           throw new Error();
         bookCache.current.set(data.id, data);
+        if (bookCache.current.size > 3)
+          bookCache.current.delete(bookCache.current.keys().next().value!);
         setBook(data);
       })
       .catch((e) => {
@@ -855,19 +871,26 @@ export default function App() {
       setSaveWarning("この環境では読書位置・設定を保存できません。");
     setRecordVersion((v) => v + 1);
   }, []);
-  const recent = readerStorage
-    .getRecentRecords(20)
-    .filter((item) => catalog.some((b) => b.id === item.bookId));
-  const resume = recent[0] && catalog.find((b) => b.id === recent[0].bookId);
+  const recent = useMemo(
+    () =>
+      readerStorage
+        .getRecentRecords(20)
+        .filter((item) => catalogById.get(item.bookId)?.dataPath),
+    [catalogById, recordVersion],
+  );
+  const resume = recent[0] && catalogById.get(recent[0].bookId);
   const featured =
     catalog.find((b) => b.title === "吾輩は猫である") || catalog[0];
-  const authors = [...new Set(catalog.map((b) => b.authorLabel))].sort(
-    (a, b) => {
-      const kana = (name: string) =>
-        catalog.find((b) => b.authorLabel === name)?.authors[0]?.kana || name;
-      return kana(a).localeCompare(kana(b), "ja");
-    },
-  );
+  const authors = useMemo(() => {
+    const names = new Map<string, string>();
+    for (const entry of catalog)
+      for (const person of entry.authors)
+        if (!names.has(person.name))
+          names.set(person.name, person.kana || person.name);
+    return [...names.keys()].sort((a, b) =>
+      names.get(a)!.localeCompare(names.get(b)!, "ja"),
+    );
+  }, [catalog]);
   const hasSearchConditions = Boolean(
     query.trim() || author || filter !== "all",
   );
@@ -877,17 +900,34 @@ export default function App() {
     setFilter("all");
     searchRef.current?.focus({ preventScroll: true });
   };
-  const visible = filterCatalog(catalog, query, sort).filter(
-    (b) =>
-      (!author || b.authorLabel === author) &&
-      (filter === "short"
-        ? b.characterCount < 30000
-        : filter === "long"
-          ? b.characterCount >= 30000
-          : filter === "recent"
-            ? recent.some((r) => r.bookId === b.id)
-            : true),
+  const visible = useMemo(
+    () =>
+      catalogIndex
+        .search(deferredQuery, sort)
+        .filter(
+          (b) =>
+            (!author || b.authors.some((person) => person.name === author)) &&
+            (filter === "short"
+              ? Boolean(b.dataPath) && b.characterCount < 30000
+              : filter === "long"
+                ? Boolean(b.dataPath) && b.characterCount >= 30000
+                : filter === "recent"
+                  ? recent.some((r) => r.bookId === b.id)
+                  : true),
+        ),
+    [catalogIndex, deferredQuery, sort, author, filter, recent],
   );
+  useEffect(() => setShelfPage(1), [deferredQuery, sort, author, filter]);
+  const pageCount = Math.max(1, Math.ceil(visible.length / CATALOG_PAGE_SIZE));
+  const currentPage = Math.min(shelfPage, pageCount);
+  const pageStart = (currentPage - 1) * CATALOG_PAGE_SIZE;
+  const pageBooks = visible.slice(pageStart, pageStart + CATALOG_PAGE_SIZE);
+  const changeShelfPage = (page: number) => {
+    setShelfPage(page);
+    document
+      .getElementById("catalog-results")
+      ?.scrollIntoView({ block: "start" });
+  };
   const openRead = (id: string) => {
     navigate(`/read/${id}`);
   };
@@ -938,7 +978,28 @@ export default function App() {
       )}
       {isReader ? (
         selected ? (
-          book?.id === selected.id ? (
+          !selected.dataPath ? (
+            <main id="main-content" tabIndex={-1} className="loading-view">
+              <Info size={32} />
+              <h1>{selected.title}</h1>
+              <p>{selected.authorLabel}</p>
+              <p>
+                {selected.unavailableReason ||
+                  "この作品の本文は公式図書カードからご確認ください。"}
+              </p>
+              <a
+                className="button primary"
+                href={selected.cardUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                青空文庫の図書カード <ExternalLink size={16} />
+              </a>
+              <a className="text-link" href="#/">
+                本棚に戻る
+              </a>
+            </main>
+          ) : book?.id === selected.id ? (
             <ReaderBoundary key={book.id}>
               <ReadingView
                 key={book.id}
@@ -1040,7 +1101,7 @@ export default function App() {
                 <span>
                   <BookOpen size={15} />
                   {catalog.length
-                    ? `${catalog.length}作品の小さな文庫`
+                    ? `${catalog.length.toLocaleString()}作品の文庫`
                     : "青空文庫の小さな文庫"}
                 </span>
                 <span>
@@ -1259,36 +1320,49 @@ export default function App() {
                 </div>
               ) : (
                 <div className="book-grid">
-                  {visible.map((b) => {
-                    const index = catalog.indexOf(b);
+                  {pageBooks.map((b) => {
+                    const index = Number(b.id) % palettes.length;
                     const record = readerStorage.getRecord(b.id);
                     return (
                       <article className="book-card" key={b.id}>
                         <button
                           className="book-cover-button"
                           onClick={() => openRead(b.id)}
-                          aria-label={`${b.title}を読む`}
+                          aria-label={`${b.title}${b.dataPath ? "を読む" : "の作品情報"}`}
                         >
                           <BookCover book={b} index={index} />
                           <span className="cover-open">
                             <BookOpen size={17} />
-                            読む
+                            {b.dataPath ? "読む" : "作品情報"}
                           </span>
                         </button>
                         <div className="book-card-copy">
                           <div className="card-category">
                             <span>
-                              {b.characterCount >= 30000 ? "長編" : "短編"}
+                              {!b.dataPath
+                                ? "公式図書カードへ"
+                                : b.characterCount >= 30000
+                                  ? "長編"
+                                  : "短編"}
                             </span>
                             <span>
                               <Clock3 size={12} />
-                              {formatMinutes(b.characterCount)}
+                              {b.dataPath
+                                ? formatMinutes(b.characterCount)
+                                : "本文未収録"}
                             </span>
                           </div>
                           <h3>
                             <a href={`#/read/${b.id}`}>{b.title}</a>
                           </h3>
                           <p>{b.authorLabel}</p>
+                          {(b.subtitle || b.orthography) && (
+                            <p className="book-edition">
+                              {[b.subtitle, b.orthography]
+                                .filter(Boolean)
+                                .join(" ／ ")}
+                            </p>
+                          )}
                           {record && (
                             <button
                               className="card-resume"
@@ -1308,8 +1382,53 @@ export default function App() {
                 </div>
               )}
             </div>
+            {visible.length > 0 && (
+              <nav className="catalog-pagination" aria-label="本棚のページ">
+                <button
+                  className="button"
+                  disabled={currentPage === 1}
+                  onClick={() => changeShelfPage(currentPage - 1)}
+                >
+                  <ChevronLeft size={16} /> 前の40作品
+                </button>
+                <div>
+                  <span role="status" aria-live="polite">
+                    {pageStart + 1}–
+                    {Math.min(pageStart + CATALOG_PAGE_SIZE, visible.length)} /{" "}
+                    {visible.length.toLocaleString()}作品
+                  </span>
+                  <label>
+                    ページ
+                    <input
+                      aria-label="本棚のページ番号"
+                      type="number"
+                      min={1}
+                      max={pageCount}
+                      value={currentPage}
+                      onChange={(event) => {
+                        const page = Number(event.target.value);
+                        if (
+                          Number.isInteger(page) &&
+                          page >= 1 &&
+                          page <= pageCount
+                        )
+                          setShelfPage(page);
+                      }}
+                    />
+                    / {pageCount}
+                  </label>
+                </div>
+                <button
+                  className="button"
+                  disabled={currentPage === pageCount}
+                  onClick={() => changeShelfPage(currentPage + 1)}
+                >
+                  次の40作品 <ChevronRight size={16} />
+                </button>
+              </nav>
+            )}
             <p className="collection-footnote">
-              作品本文は青空文庫に基づきます。読書時間は1分500文字での目安です。
+              著作権切れの公開作品を収録しています。本文未収録の作品は公式図書カードへご案内します。読書時間は1分500文字での目安です。
             </p>
           </section>
           <section className="library-note">
@@ -1347,6 +1466,7 @@ export default function App() {
           onClose={() => setAbout(false)}
           onClear={clear}
           bookCount={catalog.length}
+          sourceOnlyCount={catalog.filter((entry) => !entry.dataPath).length}
         />
       )}
       {saveWarning && (

@@ -18,6 +18,9 @@ export interface CatalogEntry {
   characterCount: number;
   excerpt: string;
   features: string[];
+  availability?: "available" | "source-only";
+  unavailableReason?: string;
+  orthography?: string;
 }
 
 export interface RubyRange {

@@ -918,6 +918,61 @@ button {
   margin-top: 35px;
   line-height: 1.8;
 }
+
+.catalog-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  margin-top: 36px;
+}
+.catalog-pagination > div {
+  display: grid;
+  gap: 8px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+.catalog-pagination label {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+}
+.catalog-pagination input {
+  width: 66px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--text);
+  background: var(--paper);
+  text-align: center;
+}
+.book-card-copy .book-edition {
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.6;
+}
+@media (max-width: 560px) {
+  .catalog-pagination {
+    gap: 8px;
+  }
+  .catalog-pagination .button {
+    padding: 10px 7px;
+    font-size: 11px;
+    gap: 3px;
+  }
+  .catalog-pagination > div {
+    font-size: 10px;
+    min-width: 98px;
+  }
+  .catalog-pagination input {
+    width: 48px;
+  }
+  .catalog-pagination label {
+    gap: 3px;
+  }
+}
 .library-note {
   border-top: 1px solid var(--line);
   text-align: center;
@@ -1402,6 +1457,9 @@ button {
 }
 .save-warning > svg {
   flex-shrink: 0;
+}
+.reader-shell ~ .save-warning {
+  bottom: calc(82px + env(safe-area-inset-bottom));
 }
 .save-warning button {
   min-width: 25px;

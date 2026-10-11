@@ -1,4 +1,5 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { gunzipSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import { FixedMeasurer } from "@non-standardworld/stone-engine.js";
 import { indexBook, PaginationEngine } from "../src/reader/engine";
@@ -7,27 +8,63 @@ import { defaultSettings, type Book, type CatalogEntry } from "../src/types";
 const catalog = JSON.parse(
   readFileSync("public/data/catalog.json", "utf8"),
 ) as CatalogEntry[];
-const books = readdirSync("public/data/books")
-  .filter((file) => file.endsWith(".json"))
-  .map(
-    (file) =>
-      JSON.parse(readFileSync(`public/data/books/${file}`, "utf8")) as Book,
-  );
+const readable = catalog.filter((entry) => entry.dataPath);
+const readBook = (entry: CatalogEntry): Book => {
+  const raw = readFileSync(`public/${entry.dataPath}`);
+  return JSON.parse(
+    (entry.dataPath.endsWith(".gz") ? gunzipSync(raw) : raw).toString("utf8"),
+  ) as Book;
+};
+// Full source/annotation validation runs in the Python importer for every work.
+// Exercise the pagination engine across the original regression shelf and a
+// deterministic spread of new works without holding the entire corpus in RAM.
+const books = readable
+  .filter((entry) => !entry.dataPath.endsWith(".gz"))
+  .map(readBook);
+const samples = readable
+  .filter((entry) => entry.dataPath.endsWith(".gz"))
+  .filter(
+    (_, index, entries) =>
+      index % Math.max(1, Math.floor(entries.length / 24)) === 0,
+  )
+  .slice(0, 24);
 
-describe("selected Aozora catalog with Stone", () => {
-  it("ships exactly one complete text for every catalog entry", () => {
+describe("public-domain Aozora catalog with Stone", () => {
+  it("ships a text for every readable entry and explicitly marks source-only works", () => {
     expect(new Set(catalog.map((entry) => entry.id)).size).toBe(catalog.length);
-    expect(books.map((book) => book.id).sort()).toEqual(
-      catalog.map((entry) => entry.id).sort(),
-    );
     for (const entry of catalog) {
-      expect(books.find((book) => book.id === entry.id)).toMatchObject(entry);
+      if (entry.dataPath)
+        expect(existsSync(`public/${entry.dataPath}`), entry.id).toBe(true);
+      else expect(entry.availability, entry.id).toBe("source-only");
+    }
+  });
+
+  it("accounts for every eligible work and every author/translator copyright flag", () => {
+    const manifest = JSON.parse(
+      readFileSync("public/data/import-manifest.json", "utf8"),
+    );
+    if (manifest.scope !== "all-public-domain") return;
+    expect(catalog.map((entry) => entry.id)).toEqual(manifest.eligibleIds);
+    const records = [...manifest.works, ...manifest.unavailableWorks];
+    expect(records.length).toBe(catalog.length);
+    expect(new Set(records.map((record) => record.id)).size).toBe(
+      catalog.length,
+    );
+    expect(manifest.works.map((record) => record.id).sort()).toEqual(
+      readable.map((entry) => entry.id).sort(),
+    );
+    for (const record of records) {
+      expect(record.workCopyright, record.id).toBe("なし");
+      expect(record.people.length, record.id).toBeGreaterThan(0);
+      expect(
+        record.people.every((person) => person.copyright === "なし"),
+        record.id,
+      ).toBe(true);
     }
   });
 
   for (const direction of ["tbRl", "lrTb"] as const) {
-    // Budget each complete work separately so growing the shelf does not exhaust
-    // one shared timeout. Every page of every catalog entry is still checked.
+    // Budget each original regression work separately.
     it.each(books)(
       `preserves the complete source of $title in ${direction}`,
       (book) => {
@@ -94,5 +131,35 @@ describe("selected Aozora catalog with Stone", () => {
         }
       }
     }, 30000);
+
+    it.each(samples)(
+      `opens compressed $id at initial, middle and ending anchors in ${direction}`,
+      (entry) => {
+        const book = readBook(entry);
+        expect(book).toMatchObject(entry);
+        const engine = new PaginationEngine(
+          book,
+          { ...defaultSettings, direction },
+          640,
+          480,
+          new FixedMeasurer(),
+        );
+        for (const offset of [
+          0,
+          Math.floor(engine.index.text.length / 2),
+          Math.max(0, engine.index.text.length - 80),
+        ]) {
+          const page = engine.pageAtPosition(offset);
+          expect(page.globalStart).toBeLessThanOrEqual(offset);
+          expect(page.globalEnd).toBeGreaterThan(offset);
+          expect(
+            page.glyphs.every(
+              (glyph) => Number.isFinite(glyph.x) && Number.isFinite(glyph.y),
+            ),
+          ).toBe(true);
+        }
+      },
+      30000,
+    );
   }
 });

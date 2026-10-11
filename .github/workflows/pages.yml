@@ -28,6 +28,11 @@ jobs:
           cache: npm
       - name: Install locked dependencies
         run: npm ci
+      - name: Validate every imported book and copyright record
+        run: |
+          python3 -m pip install -r scripts/requirements.txt
+          python3 -m unittest discover -s scripts -p 'test_*.py'
+          python3 scripts/import_books.py --validate-only
       - name: Test reading state and layout
         run: npm test
       - name: Configure Pages

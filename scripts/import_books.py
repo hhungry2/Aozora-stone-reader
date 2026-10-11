@@ -1,20 +1,24 @@
 #!/usr/bin/env python3
-"""Import the curated shelf from the official Aozora Bunko XHTML and CSV.
+"""Import all public-domain works from the official Aozora Bunko HTML and CSV.
 
 The website build needs no Python or network access: committed public/data files
-are the runtime input. Run `python scripts/import_books.py --offline` to repeat
-conversion from .cache, or `--validate-only` to check the committed output.
+are the runtime input. Imports resume from per-work checkpoints. Use --offline
+for cached sources, --validate-only for output checks, or --curated for the
+original 40-work regression shelf.
 """
 from __future__ import annotations
 
 import argparse
-import copy
 import csv
 import hashlib
 import io
 import json
 import re
 import sys
+import time
+import threading
+import os
+import gzip
 import urllib.parse
 import urllib.request
 import zipfile
@@ -28,7 +32,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CACHE = ROOT / ".cache" / "aozora"
 DATA = ROOT / "public" / "data"
 CSV_URL = "https://www.aozora.gr.jp/index_pages/list_person_all_extended_utf8.zip"
-VERSION = "aozora-xhtml-1.1.0"
+VERSION = "aozora-xhtml-1.3.0"
 GAIJI_ENCODING = "euc_jis_2004"
 GAIJI_REFERENCE = "https://docs.python.org/3/library/codecs.html#standard-encodings"
 GAIJI_PATH = re.compile(r"^/gaiji/([12])-(\d{2})/([12])-(\d{2})-(\d{2})\.png$")
@@ -63,7 +67,7 @@ KNOWN_CLASSES = {
     "main_text", "midashi_anchor", "naka-midashi", "o-midashi", "ko-midashi",
     "gaiji", "notes", "sesame_dot", "white_sesame_dot", "black_circle",
     "white_circle", "black_triangle", "white_triangle", "double_circle",
-    "bullseye", "sesame", "subscript", "superscript",
+    "bullseye", "sesame", "subscript", "superscript", "illustration",
 }
 EMPHASIS_CLASSES = {
     "sesame_dot", "white_sesame_dot", "black_circle", "white_circle",
@@ -73,6 +77,8 @@ UNSUPPORTED_LAYOUT = ("chitsuki_", "jizume_", "keigakomi")
 
 
 def utf16_length(text: str) -> int:
+    if len(text) == 1:
+        return 2 if ord(text) > 0xffff else 1
     return len(text.encode("utf-16-le")) // 2
 
 
@@ -82,7 +88,9 @@ def sha256(data: bytes) -> str:
 
 def write_json(path: Path, value: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
+    temporary = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    temporary.write_text(json.dumps(value, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
+    temporary.replace(path)
 
 
 def utc_timestamp(path: Path) -> str:
@@ -90,9 +98,12 @@ def utc_timestamp(path: Path) -> str:
 
 
 class Fetcher:
-    def __init__(self, offline: bool, refresh: bool):
+    def __init__(self, offline: bool, refresh: bool, request_interval: float = 0):
         self.offline = offline
         self.refresh = refresh
+        self.request_interval = request_interval
+        self.request_lock = threading.Lock()
+        self.last_request = 0.0
 
     def get(self, url: str, name: str) -> tuple[bytes, str]:
         url = url.replace("http://www.aozora.gr.jp/", "https://www.aozora.gr.jp/")
@@ -104,9 +115,19 @@ class Fetcher:
         if self.refresh or not path.exists():
             if self.offline:
                 raise FileNotFoundError(f"Missing cached source: {path}")
-            request = urllib.request.Request(url, headers={"User-Agent": "Aozora-stone-reader/1.0 (curated literature importer)"})
-            with urllib.request.urlopen(request, timeout=45) as response:
-                data = response.read()
+            request = urllib.request.Request(url, headers={"User-Agent": "Aozora-stone-reader/1.0 (public-domain literature importer)"})
+            for attempt in range(4):
+                try:
+                    with self.request_lock:
+                        time.sleep(max(0, self.last_request + self.request_interval - time.monotonic()))
+                        self.last_request = time.monotonic()
+                    with urllib.request.urlopen(request, timeout=45) as response:
+                        data = response.read()
+                    break
+                except (OSError, TimeoutError) as error:
+                    if attempt == 3 or getattr(error, "code", None) in {400, 401, 403, 404, 410}:
+                        raise
+                    time.sleep(2 ** attempt)
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
             write_json(meta, {"url": url, "fetchedAt": utc_timestamp(path), "sha256": sha256(data)})
@@ -136,7 +157,17 @@ def load_index(fetcher: Fetcher) -> tuple[list[dict[str, str]], dict[str, Any]]:
 def decode_source(raw: bytes) -> tuple[str, str]:
     match = re.search(br"(?:encoding|charset)\s*=\s*[\"']?([A-Za-z0-9_-]+)", raw[:1500], re.I)
     encoding = match.group(1).decode("ascii") if match else "Shift_JIS"
-    text = raw.decode(encoding, errors="strict")
+    if encoding.lower().replace("_", "-") in {"x-sjis", "x-shift-jis", "sjis"}:
+        encoding = "Shift_JIS"
+    try:
+        text = raw.decode(encoding, errors="strict")
+    except UnicodeDecodeError:
+        if encoding.lower().replace("_", "-") not in {"shift-jis", "shiftjis", "sjis"}:
+            raise
+        # Web Shift_JIS also permits Windows extensions; retain the actual
+        # decoder in provenance instead of replacing undecodable characters.
+        encoding = "cp932"
+        text = raw.decode(encoding, errors="strict")
     if "\ufffd" in text:
         raise ValueError("Replacement character in decoded source")
     return text, encoding
@@ -187,19 +218,44 @@ def logical_text(node: Tag, source_url: str, *, normalize_gaiji: bool = True) ->
     represented by one object-replacement character, except for verified Unicode
     gaiji mappings. The original unnormalized stream is also retained in audits.
     """
-    duplicate = copy.deepcopy(node)
-    for unwanted in list(duplicate.find_all(["rt", "rp", "script", "style"])):
-        unwanted.decompose()
-    for comment in duplicate.find_all(string=lambda item: isinstance(item, Comment)):
-        comment.extract()
-    for picture in duplicate.find_all("img"):
-        replacement = unicode_gaiji(picture, source_url) if normalize_gaiji else None
-        picture.replace_with(replacement["character"] if replacement else "\ufffc")
-    return ASCII_SPACE.sub("", duplicate.get_text())
+    pieces = []
+    def extract(item):
+        if isinstance(item, Comment):
+            return
+        if isinstance(item, NavigableString):
+            pieces.append(str(item))
+        elif isinstance(item, Tag):
+            if item.name in {"rt", "rp", "script", "style"}:
+                return
+            if item.name == "img":
+                replacement = unicode_gaiji(item, source_url) if normalize_gaiji else None
+                pieces.append(replacement["character"] if replacement else "\ufffc")
+            else:
+                for child in item.children:
+                    extract(child)
+    extract(node)
+    return ASCII_SPACE.sub("", "".join(pieces))
 
 
 def ruby_fingerprint(pairs: list[tuple[str, str]]) -> str:
     return sha256(json.dumps(pairs, ensure_ascii=False, separators=(",", ":")).encode())
+
+
+def ruby_reading(reading: Tag, source_url: str) -> str:
+    if reading.find("img") is None:
+        return reading.get_text().strip()
+    pieces = []
+    for item in reading.descendants:
+        if isinstance(item, Comment):
+            continue
+        if isinstance(item, NavigableString):
+            pieces.append(str(item))
+        elif isinstance(item, Tag) and item.name == "img":
+            mapping = unicode_gaiji(item, source_url)
+            if mapping is None:
+                raise ValueError("A ruby reading contains an image without a verified Unicode mapping")
+            pieces.append(mapping["character"])
+    return "".join(pieces).strip()
 
 
 class Converter:
@@ -290,19 +346,39 @@ class Converter:
                 self.normalized_gaiji.append({**replacement, "blockId": f"b{len(self.blocks) + 1:05d}", "start": start, "end": self.offset})
                 return
             asset = self.image(node)
+            dimensions = [int(match.group()) if (match := re.search(r"\d+", str(node.get(key, "0")))) else 0 for key in ("width", "height")]
+            if "gaiji" not in classes and max(dimensions) > 80 and node.find_parent("ruby") is None:
+                self.flush()
+                self.blocks.append({"id": f"b{len(self.blocks) + 1:05d}", "kind": "image", "text": "\ufffc",
+                    "rubies": [], "emphasis": [], "inlineImages": [], "indent": 0, "image": asset})
+                return
             self.append("\ufffc")
             self.inline_images.append({**asset, "start": start, "end": self.offset})
             return
         if name == "ruby":
             bases = node.find_all("rb", recursive=False)
             readings = node.find_all("rt", recursive=False)
-            if len(bases) != 1 or len(readings) != 1:
-                raise ValueError("Only an unambiguous rb/rt pair is accepted; source needs review")
+            if len(readings) != 1:
+                raise ValueError("Only an unambiguous ruby reading is accepted; source needs review")
             start = self.offset
-            self.visit(bases[0])
-            reading = readings[0].get_text().strip()
-            if start == self.offset or not reading:
-                raise ValueError("Empty ruby base or reading")
+            base_start = len(self.text)
+            if bases:
+                for base in bases:
+                    self.visit(base)
+            else:
+                for child in node.children:
+                    if not isinstance(child, Tag) or child.name not in {"rt", "rp"}:
+                        self.visit(child)
+            reading = ruby_reading(readings[0], self.source_url)
+            if not reading:
+                self.warnings.add("読みが空のルビは親文字を保持し、空の読みを省略")
+                return
+            if start == self.offset or not ASCII_SPACE.sub("", self.text[base_start:]):
+                self.warnings.add(f"原文の親文字が空のルビ（読み：{reading}）は作品情報に保持")
+                return
+            if node.find("ruby") is not None:
+                self.warnings.add(f"原文の入れ子ルビの外側の読み（{reading}）は作品情報に保持し、内側のルビを表示")
+                return
             self.rubies.append({"start": start, "end": self.offset, "reading": reading})
             return
         if "notes" in classes:
@@ -359,6 +435,53 @@ def people(rows: list[dict[str, str]]) -> list[dict[str, str]]:
     return [{**person, "role": "・".join(roles[identifier])} for identifier, person in grouped.items()]
 
 
+def extract_sections(text: str, identifier: str) -> tuple[Tag, str, list[str]]:
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    text = re.sub(r"(<h([1-6])\b[^>]*>[^<>]*</)h[1-6]\s*>", lambda match: f"{match[1]}h{match[2]}>", text, flags=re.I)
+    # html.parser preserves deeply nested/malformed legacy HTML without a
+    # parser depth limit silently discarding the tail of a long work.
+    soup = BeautifulSoup(text, "html.parser")
+    bodies = soup.select(".main_text")
+    credits = soup.select_one(".bibliographical_information")
+    if len(bodies) == 1 and credits is not None:
+        return bodies[0], credits.get_text("\n", strip=True), []
+    if len(bodies) > 1:
+        raise ValueError(f"Ambiguous main_text in {identifier}")
+    # Early Aozora HTML used .honbun/.tyu or a bare BODY separated from the
+    # colophon by a horizontal rule. Require an explicit colophon boundary.
+    credit_markers = list(re.finditer(r"(?m)^[ \t]*(?:<[^>\n]+>[ \t]*)*(?:底本|定本)(?:・初出)?[：:「]", text))
+    if not credit_markers:
+        raise ValueError(f"No unambiguous body/credits boundary in {identifier}")
+    credit_start = credit_markers[-1].start()
+    legacy_credits = BeautifulSoup(text[credit_start:], "html.parser").get_text("\n", strip=True)
+    prefix = BeautifulSoup(text[:credit_start] + "</body></html>", "html.parser")
+    honbun = prefix.select(".honbun")
+    if honbun:
+        roots = [node for node in honbun if not any(parent in honbun for parent in node.parents)]
+        body = prefix.new_tag("div")
+        for node in roots:
+            for note in list(node.select(".tyu")):
+                note.decompose()
+            body.append(node.extract())
+    elif len(bodies) == 1:
+        body = prefix.select_one(".main_text")
+    else:
+        body = prefix.body
+        if body is not None:
+            # The title/author header precedes the prose in the early template.
+            for header in list(body.select(".header")):
+                header.decompose()
+            for heading in list(body.find_all(["h1", "h2"], recursive=False)):
+                if len(heading.get_text(strip=True)) < 200:
+                    heading.decompose()
+    if body is None or not body.get_text(strip=True):
+        raise ValueError(f"Empty legacy body in {identifier}")
+    warnings = ["旧形式HTMLの本文と底本・入力者・校正者情報を抽出"]
+    if re.search(r"<!r>", text, flags=re.I):
+        warnings.append("旧形式のルビは原文の括弧表記を本文中に保持")
+    return body, legacy_credits, warnings
+
+
 def import_book(identifier: str, title: str, rows: list[dict[str, str]], fetcher: Fetcher) -> tuple[dict[str, Any], dict[str, Any]]:
     matches = [row for row in rows if row["作品ID"] == identifier]
     if not matches:
@@ -372,15 +495,12 @@ def import_book(identifier: str, title: str, rows: list[dict[str, str]], fetcher
     url = row["XHTML/HTMLファイルURL"].replace("http://", "https://")
     raw, fetched_at = fetcher.get(url, identifier + ".html")
     text, encoding = decode_source(raw)
-    soup = BeautifulSoup(text, "html.parser")
-    bodies = soup.select(".main_text")
-    if len(bodies) != 1:
-        raise ValueError(f"Expected one main_text in {identifier}")
-    credits = soup.select_one(".bibliographical_information")
-    if credits is None:
-        raise ValueError(f"Credits missing from {identifier}")
+    body, credits, extraction_warnings = extract_sections(text, identifier)
     converter = Converter(url, fetcher)
-    blocks = converter.convert(bodies[0])
+    converter.warnings.update(extraction_warnings)
+    if encoding == "cp932":
+        converter.warnings.add("Shift_JIS表記の原文にWindows拡張文字があるためCP932で厳密にデコード")
+    blocks = converter.convert(body)
     authors = people(matches)
     features = []
     if any(block["rubies"] for block in blocks):
@@ -389,6 +509,8 @@ def import_book(identifier: str, title: str, rows: list[dict[str, str]], fetcher
         features.append("傍点")
     if any(block["inlineImages"] for block in blocks):
         features.append("外字画像")
+    if any(block["kind"] == "image" for block in blocks):
+        features.append("挿絵・図版")
     toc = [{"title": block["text"], "blockId": block["id"], "level": block["level"]} for block in blocks if block["kind"] == "heading"]
     if toc:
         features.append("目次")
@@ -397,6 +519,8 @@ def import_book(identifier: str, title: str, rows: list[dict[str, str]], fetcher
         features.append("長編")
     # Preserve existing reading versions for works whose output is unchanged.
     version_payload = {"version": "aozora-xhtml-1.0.0", "source": sha256(raw), "metadata": matches}
+    if any(block["kind"] == "image" for block in blocks):
+        version_payload["illustrations"] = "aozora-illustrations-1"
     previous_content_version = sha256(json.dumps(version_payload, ensure_ascii=False, sort_keys=True).encode())[:16]
     if converter.normalized_gaiji:
         version_payload["gaijiUnicode"] = converter.normalized_gaiji
@@ -408,15 +532,34 @@ def import_book(identifier: str, title: str, rows: list[dict[str, str]], fetcher
         "cardUrl": row["図書カードURL"].replace("http://", "https://"),
         "dataPath": f"data/books/{identifier}.json", "contentVersion": content_version,
         "characterCount": character_count,
-        "excerpt": next(block["text"].replace("\ufffc", "※")[:90] for block in blocks if block["kind"] == "paragraph"),
+        "excerpt": next((block["text"].replace("\ufffc", "※")[:90] for block in blocks if block["kind"] == "paragraph"), blocks[0]["text"][:90] if blocks else ""),
         "features": features,
     }
     book = {
         **entry, "schemaVersion": 1, "blocks": blocks, "toc": toc,
-        "credits": credits.get_text("\n", strip=True),
+        "credits": credits,
         "source": {"url": url, "fetchedAt": fetched_at, "sha256": sha256(raw), "encoding": encoding},
-        "conversion": {"version": VERSION, "warnings": sorted(converter.warnings), "normalizedGaiji": converter.normalized_gaiji},
+        "conversion": {"version": VERSION, "warnings": sorted(converter.warnings), "normalizedGaiji": converter.normalized_gaiji, "illustrationsVersion": 1},
     }
+    body_images = [picture for picture in body.find_all("img") if picture.find_parent(["rt", "rp"]) is None]
+    reading_images = [picture for picture in body.find_all("img") if picture.find_parent("rt") is not None]
+    if reading_images:
+        book["conversion"]["normalizedRubyGaiji"] = [unicode_gaiji(picture, url) for picture in reading_images]
+    source_ruby_pairs = [
+        (logical_text(ruby, url), ruby_reading(ruby.find("rt", recursive=False), url))
+        for ruby in body.find_all("ruby")
+        if ruby.find("rt", recursive=False) is not None and ruby_reading(ruby.find("rt", recursive=False), url) and logical_text(ruby, url) and ruby.find("ruby") is None
+    ]
+    unanchored_readings = [ruby_reading(ruby.find("rt", recursive=False), url)
+        for ruby in body.find_all("ruby") if ruby.find("rt", recursive=False) is not None
+        and ruby_reading(ruby.find("rt", recursive=False), url) and not logical_text(ruby, url)]
+    if unanchored_readings:
+        book["conversion"]["unanchoredRubyReadings"] = unanchored_readings
+    nested_readings = [ruby_reading(ruby.find("rt", recursive=False), url)
+        for ruby in body.find_all("ruby") if ruby.find("rt", recursive=False) is not None
+        and ruby_reading(ruby.find("rt", recursive=False), url) and logical_text(ruby, url) and ruby.find("ruby") is not None]
+    if nested_readings:
+        book["conversion"]["nestedRubyReadings"] = nested_readings
     if converter.normalized_gaiji:
         book["conversion"]["sourcePlaceholderVersion"] = previous_content_version
         if all(utf16_length(item["character"]) == 1 for item in converter.normalized_gaiji):
@@ -425,19 +568,22 @@ def import_book(identifier: str, title: str, rows: list[dict[str, str]], fetcher
         "id": identifier, "title": title, "orthography": row["文字遣い種別"],
         "workCopyright": row["作品著作権フラグ"],
         "people": [{"id": value["人物ID"], "copyright": value["人物著作権フラグ"], "role": value["役割フラグ"]} for value in matches],
-        "sourceGlyphCount": len(logical_text(bodies[0], url)),
-        "sourceGlyphSha256": sha256(logical_text(bodies[0], url).encode()),
-        "sourceLiteralGlyphSha256": sha256(logical_text(bodies[0], url, normalize_gaiji=False).encode()),
+        "sourceGlyphCount": len(logical_text(body, url)),
+        "sourceGlyphSha256": sha256(logical_text(body, url).encode()),
+        "sourceLiteralGlyphSha256": sha256(logical_text(body, url, normalize_gaiji=False).encode()),
         "rubyCount": sum(len(block["rubies"]) for block in blocks),
-        "sourceRubyCount": len(bodies[0].find_all("ruby")),
-        "sourceRubySha256": ruby_fingerprint([
-            (logical_text(ruby.find("rb"), url), ruby.find("rt").get_text().strip())
-            for ruby in bodies[0].find_all("ruby")
-        ]),
-        "imageCount": sum(len(block["inlineImages"]) for block in blocks),
-        "sourceImageCount": len(bodies[0].find_all("img")),
+        "sourceRubyCount": len(source_ruby_pairs),
+        "sourceRubyTagCount": len(body.find_all("ruby")),
+        "sourceUnanchoredRubyReadings": unanchored_readings,
+        "sourceNestedRubyReadings": nested_readings,
+        "sourceEmptyRubyReadingCount": sum(not ruby_reading(ruby.find("rt", recursive=False), url)
+            for ruby in body.find_all("ruby") if ruby.find("rt", recursive=False) is not None),
+        "sourceRubySha256": ruby_fingerprint(source_ruby_pairs),
+        "imageCount": sum(len(block["inlineImages"]) + (block["kind"] == "image") for block in blocks),
+        "sourceImageCount": len(body_images),
+        "sourceReadingImageCount": len(reading_images),
         "normalizedGaijiCount": len(converter.normalized_gaiji),
-        "sourceNormalizedGaijiCount": sum(unicode_gaiji(picture, url) is not None for picture in bodies[0].find_all("img")),
+        "sourceNormalizedGaijiCount": sum(unicode_gaiji(picture, url) is not None for picture in body_images),
     }
     validate_book(book, audit)
     return book, audit
@@ -453,6 +599,17 @@ def validate_book(book: dict[str, Any], audit: dict[str, Any]) -> None:
     if len(logical) != audit["sourceGlyphCount"] or sha256(logical.encode()) != audit["sourceGlyphSha256"]:
         raise ValueError("Content differs from independently extracted source glyph stream")
     normalized_gaiji = book["conversion"].get("normalizedGaiji", [])
+    reading_gaiji = book["conversion"].get("normalizedRubyGaiji", [])
+    if len(reading_gaiji) != audit.get("sourceReadingImageCount", 0) or any(item is None for item in reading_gaiji):
+        raise ValueError("Ruby reading gaiji differs from source")
+    unanchored = book["conversion"].get("unanchoredRubyReadings", [])
+    if unanchored != audit.get("sourceUnanchoredRubyReadings", []):
+        raise ValueError("Unanchored source ruby readings were not retained")
+    nested = book["conversion"].get("nestedRubyReadings", [])
+    if nested != audit.get("sourceNestedRubyReadings", []):
+        raise ValueError("Nested source ruby readings were not retained")
+    if "sourceRubyTagCount" in audit and audit["sourceRubyTagCount"] != audit["sourceRubyCount"] + len(unanchored) + len(nested) + audit.get("sourceEmptyRubyReadingCount", 0):
+        raise ValueError("Source ruby tags were not fully accounted for")
     normalized_count = audit.get("normalizedGaijiCount", 0)
     if normalized_count != audit.get("sourceNormalizedGaijiCount", 0) or len(normalized_gaiji) != normalized_count:
         raise ValueError("Unicode gaiji count differs from source")
@@ -461,6 +618,8 @@ def validate_book(book: dict[str, Any], audit: dict[str, Any]) -> None:
     ruby_pairs = []
     for block in book["blocks"]:
         text = block["text"]
+        if block["kind"] == "image" and (text != "\ufffc" or not block.get("image") or not (ROOT / "public" / block["image"]["src"]).is_file()):
+            raise ValueError("Missing standalone illustration or image placeholder")
         if "\ufffd" in text:
             raise ValueError("Replacement character in output")
         boundaries = {0}
@@ -558,6 +717,10 @@ def write_report(books: list[dict[str, Any]], audits: list[dict[str, Any]], inde
 def validate_committed() -> None:
     manifest = json.loads((DATA / "import-manifest.json").read_text(encoding="utf-8"))
     catalog = json.loads((DATA / "catalog.json").read_text(encoding="utf-8"))
+    if manifest.get("scope") == "all-public-domain":
+        from import_all import validate_all
+        validate_all()
+        return
     if [entry["id"] for entry in catalog] != [identifier for identifier, _ in SELECTION]:
         raise ValueError(f"Catalog does not contain the curated {len(SELECTION)} works in order")
     if [entry["id"] for entry in manifest["works"]] != [entry["id"] for entry in catalog]:
@@ -577,11 +740,25 @@ def main() -> None:
     parser.add_argument("--offline", action="store_true", help="Use cached official files without network access")
     parser.add_argument("--refresh", action="store_true", help="Download current official sources again")
     parser.add_argument("--validate-only", action="store_true", help="Check committed JSON and image assets without network access")
+    parser.add_argument("--all", action="store_true", help="Import all public-domain entries, checkpointing each validated work")
+    parser.add_argument("--curated", action="store_true", help="Explicitly rebuild only the original 40-work regression shelf")
+    parser.add_argument("--workers", type=int, default=4, help="Concurrent conversions for --all (1-8)")
+    parser.add_argument("--limit", type=int, help="Limit --all to a diagnostic batch; does not publish the catalog")
     args = parser.parse_args()
+    if args.curated and args.all:
+        parser.error("--curated and --all cannot be combined")
+    if args.limit is not None and args.limit < 1:
+        parser.error("--limit must be a positive integer")
+    if args.curated and args.limit is not None:
+        parser.error("--limit cannot be combined with --curated")
     if args.offline and args.refresh:
         parser.error("--offline and --refresh cannot be combined")
     if args.validate_only:
         validate_committed()
+        return
+    if not args.curated:
+        from import_all import run_all
+        run_all(args)
         return
     fetcher = Fetcher(args.offline, args.refresh)
     rows, index = load_index(fetcher)
@@ -595,7 +772,9 @@ def main() -> None:
     catalog_keys = ("id", "title", "titleKana", "subtitle", "authors", "authorLabel", "cardUrl", "dataPath", "contentVersion", "characterCount", "excerpt", "features")
     for book in books:
         write_json(DATA / "books" / (book["id"] + ".json"), book)
-    write_json(DATA / "catalog.json", [{key: book[key] for key in catalog_keys} for book in books])
+    catalog = [{key: book[key] for key in catalog_keys} for book in books]
+    write_json(DATA / "catalog.json", catalog)
+    (DATA / "catalog.json.gz").write_bytes(gzip.compress((json.dumps(catalog, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8"), mtime=0))
     write_json(DATA / "import-manifest.json", {"schemaVersion": 1, "conversionVersion": VERSION, "index": index, "works": audits})
     write_report(books, audits, index)
     validate_committed()

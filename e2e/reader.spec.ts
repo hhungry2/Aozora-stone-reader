@@ -114,7 +114,9 @@ test("browser history and clearing saved data keep reading usable", async ({
   await expect(rendered).not.toHaveAttribute("data-start", "0");
   const saved = await rendered.getAttribute("data-start");
   await page.getByRole("link", { name: "本棚へ", exact: true }).click();
-  await expect(page.locator(".book-card")).toHaveCount(catalog.length);
+  await expect(page.locator(".book-card")).toHaveCount(
+    Math.min(40, catalog.length),
+  );
   await page.goBack();
   await expect(rendered).toHaveAttribute("data-start", saved!);
   await page
@@ -136,7 +138,7 @@ test("a failed catalog request on a reader deep link can be retried", async ({
   page,
 }) => {
   let fail = true;
-  await page.route("**/data/catalog.json", (route) =>
+  await page.route("**/data/catalog.json.gz", (route) =>
     fail ? route.abort() : route.continue(),
   );
   await page.goto("/#/read/000127");
@@ -185,10 +187,14 @@ test("catalog, vertical/horizontal reading, position restoration, bookmarks and 
   const failures: string[] = [];
   page.on("pageerror", (error) => failures.push(error.message));
   await page.goto("/");
-  await expect(page.locator(".book-card")).toHaveCount(catalog.length);
+  await expect(page.locator(".book-card")).toHaveCount(
+    Math.min(40, catalog.length),
+  );
   await page.getByRole("searchbox").fill("らしょうもん");
-  await expect(page.locator(".book-card")).toHaveCount(1);
-  await page.locator(".book-card h3 a").click();
+  await expect(
+    page.locator('.book-card a[href="#/read/000127"]'),
+  ).toBeVisible();
+  await page.locator('.book-card a[href="#/read/000127"]').click();
   await expect(page).toHaveURL(/#\/read\/000127$/u);
   await expect(page.getByRole("dialog")).toHaveCount(0);
   const rendered = page.getByTestId("reader-page");
@@ -268,7 +274,9 @@ test("long book, contents, missing route and denied storage remain usable", asyn
     page.getByRole("heading", { name: "この作品は本棚にありません" }),
   ).toBeVisible();
   await page.getByRole("link", { name: "本棚に戻る", exact: true }).click();
-  await expect(page.locator(".book-card")).toHaveCount(catalog.length);
+  await expect(page.locator(".book-card")).toHaveCount(
+    Math.min(40, catalog.length),
+  );
 });
 
 test("screen layout keeps body text and ruby inside narrow and wide viewports", async ({
@@ -285,7 +293,9 @@ test("screen layout keeps body text and ruby inside narrow and wide viewports", 
     });
     const page = await context.newPage();
     await page.goto("/");
-    await expect(page.locator(".book-card")).toHaveCount(catalog.length);
+    await expect(page.locator(".book-card")).toHaveCount(
+      Math.min(40, catalog.length),
+    );
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth),
     ).toBeLessThanOrEqual(size.width);
