@@ -15,6 +15,20 @@ function fixture(blocks: Partial<TextBlock>[]): Book {
 }
 
 for (const direction of ['tbRl', 'lrTb'] as const) describe(`Stone pagination ${direction}`, () => {
+  it('cleans the displayed opening title while preserving the source title and body anchors', () => {
+    const book = fixture([{ text: '元の本文。'.repeat(80) }]);
+    book.title = '（作品の題名）';
+    const originalIndex = indexBook(book);
+    const engine = new PaginationEngine(book, { ...defaultSettings, direction }, 320, 370);
+    const first = engine.pageAtPosition(0);
+    expect(first.opening?.title).toBe('作品の題名');
+    expect(first.opening?.glyphs.map(glyph => glyph.text).join('')).toBe('作品の題名');
+    expect(book.title).toBe('（作品の題名）');
+    expect(engine.index).toEqual(originalIndex);
+    expect(first.start).toMatchObject({ blockId: 'p0', offset: 0 });
+    expect(engine.pageAt(first.end).start).toEqual(first.end);
+  });
+
   it('places work information before the opening passage without changing source anchors', () => {
     const book = fixture([{ text: '　元の本文を保つ。'.repeat(80) }]);
     book.title = '作品の題名';

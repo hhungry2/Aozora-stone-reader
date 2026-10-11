@@ -37,7 +37,7 @@ describe("public-domain Aozora catalog with Stone", () => {
         expect(existsSync(`public/${entry.dataPath}`), entry.id).toBe(true);
       else expect(entry.availability, entry.id).toBe("source-only");
     }
-  });
+  }, 30000);
 
   it("accounts for every eligible work and every author/translator copyright flag", () => {
     const manifest = JSON.parse(

@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import catalog from "../public/data/catalog.json" with { type: "json" };
+import { displayTitle } from "../src/lib/titles";
 
 const originalIds = new Set([
   "000127",
@@ -32,6 +33,89 @@ async function expectResults(page: Page, count: number) {
   await expect(page.locator(".collection-results")).toHaveText(
     `${count} / ${catalog.length}作品`,
   );
+}
+
+test("the opening shelf features classics and can switch to title order", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expectResults(page, catalog.length);
+  const sort = page.getByRole("combobox", { name: "並べ替え" });
+  await expect(sort).toHaveValue("recommended");
+  const firstEight = [
+    "こころ",
+    "人間失格",
+    "羅生門",
+    "銀河鉄道の夜",
+    "坊っちゃん",
+    "走れメロス",
+    "山月記",
+    "檸檬",
+  ];
+  const titles = page.locator(".book-card h3 a");
+  expect((await titles.allTextContents()).slice(0, 8)).toEqual(firstEight);
+  await sort.selectOption("title");
+  expect((await titles.allTextContents()).slice(0, 8)).not.toEqual(firstEight);
+  await sort.selectOption("recommended");
+  await expect(titles.first()).toHaveText("こころ");
+  await expectResults(page, catalog.length);
+});
+
+for (const work of [
+  {
+    id: "055927",
+    source: "（最も純粋に意地悪い奴）",
+    title: "最も純粋に意地悪い奴",
+  },
+  {
+    id: "044927",
+    source: "〈あかい、やさしい　はなもやうが〉",
+    title: "あかい、やさしい　はなもやうが",
+  },
+  { id: "059760", source: "「悪魔の足跡」", title: "悪魔の足跡" },
+]) {
+  test(`the enclosing brackets of ${work.id} disappear across the shelf and reader`, async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await page.getByRole("searchbox").fill(work.source);
+    const card = page
+      .locator(".book-card")
+      .filter({ has: page.locator(`h3 a[href="#/read/${work.id}"]`) });
+    await expect(card.locator("h3 a")).toHaveText(work.title);
+    await expect(card.locator(".cover-title")).toHaveText(work.title);
+    await expect(
+      card.getByRole("button", { name: `${work.title}を読む`, exact: true }),
+    ).toBeVisible();
+    await page.getByRole("searchbox").fill(work.title);
+    await card.locator("h3 a").click();
+    for (const direction of ["tbRl", "lrTb"]) {
+      if (direction === "lrTb")
+        await page.getByRole("button", { name: "横書きに切り替え" }).click();
+      await expect(
+        page.getByTestId("reader-page").locator("svg"),
+      ).toHaveAttribute("data-stone-direction", direction);
+      await expect(page.locator(".reader-header strong")).toHaveText(
+        work.title,
+      );
+      await expect(page.locator(".reader-opening-info h1")).toHaveText(
+        work.title,
+      );
+      const source = catalog.find((entry) => entry.id === work.id)!;
+      await expect(page.locator(".reader-opening")).toHaveText(
+        `${work.title}${source.subtitle}${source.authorLabel}`.replace(
+          /\s/gu,
+          "",
+        ),
+      );
+    }
+    await page
+      .locator('.reader-header button[aria-controls="reader-work-info"]')
+      .click();
+    await expect(
+      page.getByRole("region", { name: "作品情報の詳細" }).locator("h2"),
+    ).toHaveText(work.title);
+  });
 }
 
 test("the expanded collection can be found by title, reading and multiple search words", async ({
@@ -181,7 +265,7 @@ test("a newly added work opens from search in both writing directions with its s
     );
     await expect(rendered).toHaveAttribute("data-start", "0");
     await expect(rendered.locator(".reader-opening")).toHaveText(
-      `${work.title}${work.authorLabel}`,
+      `${displayTitle(work.title)}${work.authorLabel}`,
     );
     await expect(rendered.locator(".reader-accessible-text")).not.toHaveText(
       "",
@@ -201,7 +285,9 @@ test("a newly added work opens from search in both writing directions with its s
   await page.getByRole("button", { name: "検索条件をクリア" }).click();
   await page.getByRole("button", { name: "最近読んだ本", exact: true }).click();
   await expectResults(page, 1);
-  await expect(page.locator(".book-card h3 a")).toHaveText(work.title);
+  await expect(page.locator(".book-card h3 a")).toHaveText(
+    displayTitle(work.title),
+  );
   await page.getByRole("button", { name: "検索条件をクリア" }).click();
   await expectResults(page, catalog.length);
   expect(failures).toEqual([]);

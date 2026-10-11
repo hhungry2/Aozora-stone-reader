@@ -34,8 +34,13 @@ import {
   X,
 } from "lucide-react";
 import { anchorProgress, createAnchor, restoreAnchor } from "./lib/anchors";
-import { CATALOG_PAGE_SIZE, createCatalogIndex } from "./lib/catalog";
+import {
+  CATALOG_PAGE_SIZE,
+  createCatalogIndex,
+  type CatalogSort,
+} from "./lib/catalog";
 import { fetchJson } from "./lib/data";
+import { displayTitle } from "./lib/titles";
 import { readerStorage } from "./lib/state";
 import { ReaderPages, usePagination } from "./reader";
 import {
@@ -129,7 +134,7 @@ function BookCover({
     >
       <span className="cover-edition">青空文庫</span>
       <span className="cover-line" />
-      <span className="cover-title">{book.title}</span>
+      <span className="cover-title">{displayTitle(book.title)}</span>
       <span className="cover-author">{book.authorLabel}</span>
       <span className="cover-no">{String(index + 1).padStart(2, "0")}</span>
       <span className="cover-grain" />
@@ -304,7 +309,7 @@ function WorkDetails({
       tabIndex={0}
     >
       <div className="reader-work-info-heading">
-        <h2 className="serif">{book.title}</h2>
+        <h2 className="serif">{displayTitle(book.title)}</h2>
         {book.subtitle && <p>{book.subtitle}</p>}
         <p>{book.authorLabel}</p>
         <p className="reader-work-info-facts">
@@ -771,7 +776,7 @@ export default function App() {
   const [settings, setSettings] = useState(() => readerStorage.getSettings());
   const [about, setAbout] = useState(false);
   const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<"title" | "author">("title");
+  const [sort, setSort] = useState<CatalogSort>("recommended");
   const [filter, setFilter] = useState("all");
   const [author, setAuthor] = useState("");
   const [shelfPage, setShelfPage] = useState(1);
@@ -981,7 +986,7 @@ export default function App() {
           !selected.dataPath ? (
             <main id="main-content" tabIndex={-1} className="loading-view">
               <Info size={32} />
-              <h1>{selected.title}</h1>
+              <h1>{displayTitle(selected.title)}</h1>
               <p>{selected.authorLabel}</p>
               <p>
                 {selected.unavailableReason ||
@@ -1122,7 +1127,7 @@ export default function App() {
                   </div>
                   <div className="hero-book front">
                     <button
-                      aria-label={`${featured.title}を読む`}
+                      aria-label={`${displayTitle(featured.title)}を読む`}
                       onClick={() => openRead(featured.id)}
                     >
                       <BookCover book={featured} index={0} />
@@ -1158,7 +1163,7 @@ export default function App() {
               <div>
                 <span className="eyebrow">CONTINUE READING</span>
                 <h2>
-                  {resume.title}
+                  {displayTitle(resume.title)}
                   <span>{resume.authorLabel}</span>
                 </h2>
               </div>
@@ -1256,10 +1261,9 @@ export default function App() {
                   <select
                     aria-label="並べ替え"
                     value={sort}
-                    onChange={(e) =>
-                      setSort(e.target.value as "title" | "author")
-                    }
+                    onChange={(e) => setSort(e.target.value as CatalogSort)}
                   >
+                    <option value="recommended">おすすめ順</option>
                     <option value="title">作品名順</option>
                     <option value="author">作家名順</option>
                   </select>
@@ -1328,7 +1332,7 @@ export default function App() {
                         <button
                           className="book-cover-button"
                           onClick={() => openRead(b.id)}
-                          aria-label={`${b.title}${b.dataPath ? "を読む" : "の作品情報"}`}
+                          aria-label={`${displayTitle(b.title)}${b.dataPath ? "を読む" : "の作品情報"}`}
                         >
                           <BookCover book={b} index={index} />
                           <span className="cover-open">
@@ -1353,7 +1357,9 @@ export default function App() {
                             </span>
                           </div>
                           <h3>
-                            <a href={`#/read/${b.id}`}>{b.title}</a>
+                            <a href={`#/read/${b.id}`}>
+                              {displayTitle(b.title)}
+                            </a>
                           </h3>
                           <p>{b.authorLabel}</p>
                           {(b.subtitle || b.orthography) && (
@@ -1819,7 +1825,7 @@ function ReadingView({
           <span>本棚へ</span>
         </a>
         <div className="reader-title">
-          <strong>{book.title}</strong>
+          <strong>{displayTitle(book.title)}</strong>
           <span>{book.authorLabel}</span>
         </div>
         <div className="reader-header-actions">

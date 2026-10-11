@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { filterCatalog } from '../src/lib/catalog';
+import { createCatalogIndex, filterCatalog } from '../src/lib/catalog';
 import type { CatalogEntry } from '../src/types';
 
 function entry(id: string, overrides: Partial<CatalogEntry> = {}): CatalogEntry {
@@ -63,6 +63,32 @@ describe('catalog metadata search', () => {
 });
 
 describe('catalog sort order', () => {
+  it('places readable classics first without losing or duplicating the rest of the catalog', () => {
+    const catalog = [
+      entry('100001', { title: 'あ', titleKana: 'あ' }),
+      entry('000301', { title: '人間失格', titleKana: 'にんげんしっかく', dataPath: 'data/books/000301.json' }),
+      entry('000773', { title: 'こころ', titleKana: 'こころ', dataPath: 'data/books/000773.json' }),
+      entry('000127', { title: '羅生門', titleKana: 'らしょうもん' }),
+    ];
+    const index = createCatalogIndex(catalog);
+    expect(index.search('', 'recommended').map((work) => work.id)).toEqual(['000773', '000301', '100001', '000127']);
+    expect(index.search('', 'title').map((work) => work.id)).toEqual(['100001', '000773', '000301', '000127']);
+    expect(index.search('人間', 'recommended').map((work) => work.id)).toEqual(['000301']);
+    expect(catalog.map((work) => work.id)).toEqual(['100001', '000301', '000773', '000127']);
+  });
+
+  it('sorts cleaned title readings while allowing both original and cleaned search queries', () => {
+    const catalog = [
+      entry('2', { title: '（い）', titleKana: '（い）' }),
+      entry('1', { title: 'あ', titleKana: 'あ' }),
+    ];
+    const index = createCatalogIndex(catalog);
+    expect(index.search('').map((work) => work.id)).toEqual(['1', '2']);
+    expect(index.search('い')).toEqual([catalog[0]]);
+    expect(index.search('（い）')).toEqual([catalog[0]]);
+    expect(catalog[0].title).toBe('（い）');
+  });
+
   it('orders an author by title before using numeric ids to break ties', () => {
     const catalog = [
       entry('1', { title: '吾輩は猫である', titleKana: 'わがはいはねこである' }),

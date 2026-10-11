@@ -4,6 +4,7 @@ import {
   type FontMeasurer, type GlyphElement, type Run, type Token,
 } from '@non-standardworld/stone-engine.js';
 import { fontFamilies, latinFontFamilies, type Anchor, type Book, type ReaderSettings, type TextBlock } from '../types';
+import { displayTitle } from '../lib/titles';
 
 function readerFonts(settings: ReaderSettings) {
   return {
@@ -74,7 +75,8 @@ export interface ReaderPageData {
 /** Keep the title outside the source index so existing anchors and copying stay intact. */
 function layoutOpening(book: Book, settings: ReaderSettings, width: number, height: number, measurer: FontMeasurer) {
   const vertical = settings.direction === 'tbRl';
-  const text = [book.title, book.subtitle, book.authorLabel].filter(Boolean).join('\n');
+  const title = displayTitle(book.title);
+  const text = [title, book.subtitle, book.authorLabel].filter(Boolean).join('\n');
   if (!text) return null;
   const context = new StoneContext({
     direction: settings.direction, fontSize: settings.fontSize * 1.25, lineHeightScale: 1.6,
@@ -86,7 +88,7 @@ function layoutOpening(book: Book, settings: ReaderSettings, width: number, heig
   const parsed = parseText(text, settings.dividesByWords);
   context.runs = parsed.runs;
   context.tokens = parsed.tokens;
-  applyFontStyleSpans(context, [{ start: 0, end: book.title.length, fontWeight: 700 }]);
+  applyFontStyleSpans(context, [{ start: 0, end: title.length, fontWeight: 700 }]);
   measureRuns(context);
   new Layouter(context).layout();
   const left = Math.min(...context.runs.map((run) => run.frame.x));
@@ -102,7 +104,7 @@ function layoutOpening(book: Book, settings: ReaderSettings, width: number, heig
   return {
     extent: extent * scale, gap,
     opening: {
-      title: book.title, subtitle: book.subtitle, author: book.authorLabel,
+      title, subtitle: book.subtitle, author: book.authorLabel,
       glyphs: glyphElements(context), x: 0, y: 0, scale,
     },
   };
