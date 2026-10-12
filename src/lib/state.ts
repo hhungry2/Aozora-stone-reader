@@ -112,6 +112,8 @@ export function createReaderStorage(storage: StorageLike | null = browserStorage
       showFrames: typeof value.showFrames === 'boolean',
       theme: value.theme === 'paper' || value.theme === 'light' || value.theme === 'dark',
       ruby: typeof value.ruby === 'boolean',
+      speechRate: inSteps(value.speechRate, 0.5, 2, 0.1),
+      speechVoiceURI: isText(value.speechVoiceURI, 2000),
     };
     for (const key of Object.keys(valid) as (keyof ReaderSettings)[]) {
       if (valid[key]) Object.assign(result, { [key]: key === 'lineHeight' ? lineHeight : value[key] });

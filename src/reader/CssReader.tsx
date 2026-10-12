@@ -19,6 +19,7 @@ import {
 } from "../types";
 import { displayTitle } from "../lib/titles";
 import { createAnchor } from "../lib/anchors";
+import { readerImageUrl } from "../lib/assets";
 import { loadReaderFont } from "./fonts";
 import "./css-reader.css";
 
@@ -81,8 +82,6 @@ interface MeasuredBlock extends SourceBlock {
 const anchorKey = (anchor: Anchor) => `${anchor.blockId}:${anchor.offset}`;
 const sourceText = (block: TextBlock) =>
   block.kind === "image" && !block.text ? "\ufffc" : block.text;
-const imagePath = (src: string) =>
-  `${import.meta.env.BASE_URL}${src.replace(/^\//u, "")}`;
 const NativeSegmenter = (
   Intl as unknown as {
     Segmenter?: new (
@@ -205,7 +204,7 @@ function blockContent(block: TextBlock, settings: ReaderSettings): ReactNode[] {
               data-css-end={image.end}
             >
               <img
-                src={imagePath(image.src)}
+                src={readerImageUrl(image.src)}
                 alt={image.alt}
                 draggable={false}
               />
@@ -295,7 +294,7 @@ function NativeBlock({
   if (block.kind === "image" && block.image) {
     const image = (
       <img
-        src={imagePath(block.image.src)}
+        src={readerImageUrl(block.image.src)}
         alt={block.image.alt}
         draggable={false}
       />

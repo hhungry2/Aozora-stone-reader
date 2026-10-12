@@ -1,0 +1,229 @@
+.hero-web-link {
+  margin-left: 24px;
+}
+.web-novel-launcher {
+  margin: 0 0 48px;
+  padding: 30px 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.web-novel-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 15px;
+  margin-bottom: 22px;
+}
+.web-novel-heading > svg {
+  color: var(--green);
+  flex-shrink: 0;
+  margin-top: 5px;
+}
+.web-novel-heading h2 {
+  font-size: 26px;
+  margin: 0 0 8px;
+}
+.web-novel-heading p,
+.web-novel-connection p {
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.8;
+  margin: 0;
+}
+.web-novel-launcher label,
+.web-novel-connection label {
+  display: block;
+  font-size: 15px;
+  margin-bottom: 8px;
+}
+.web-novel-input-row {
+  display: flex;
+  gap: 10px;
+}
+.web-novel-input-row input {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 13px 14px;
+  color: var(--text);
+  background: var(--bg);
+  font-family: inherit;
+  font-size: 16px;
+}
+.web-novel-input-row .button {
+  flex-shrink: 0;
+}
+.web-novel-connection {
+  margin-top: 20px;
+  font-size: 15px;
+}
+.web-novel-connection > summary {
+  cursor: pointer;
+  color: var(--green);
+}
+.web-novel-connection > p,
+.web-novel-connection > form,
+.web-novel-connection > a {
+  margin-top: 14px;
+}
+.web-novel-connection .text-link {
+  font-size: 15px;
+}
+.web-novel-setup-steps {
+  padding-left: 24px;
+  font-size: 15px;
+  line-height: 1.9;
+  color: var(--muted);
+}
+.web-novel-error {
+  color: #b3261e;
+  line-height: 1.8;
+}
+:root[data-theme="dark"] .web-novel-error {
+  color: #ff8a80;
+}
+.web-novel-recent {
+  margin-top: 28px;
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+}
+.web-novel-recent h3 {
+  font-size: 17px;
+}
+.web-novel-recent ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 13px;
+}
+.web-novel-recent li {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.web-novel-recent a {
+  color: var(--green);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-size: 17px;
+  overflow-wrap: anywhere;
+}
+.web-novel-recent span {
+  font-size: 14px;
+  color: var(--muted);
+}
+.web-novel-screen {
+  max-width: 940px;
+  padding: 32px;
+  margin: auto;
+  min-height: 100dvh;
+}
+.web-novel-screen h1 {
+  font-size: 32px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.web-novel-screen h2 {
+  font-size: 23px;
+  margin: 28px 0 20px;
+}
+.web-novel-work-heading {
+  margin: 38px 0 28px;
+}
+.web-novel-description {
+  white-space: pre-wrap;
+  font-size: 17px;
+  line-height: 1.95;
+  overflow-wrap: anywhere;
+}
+.web-novel-navigation {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 16px 0;
+}
+.web-novel-episodes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.web-novel-episodes h3 {
+  font-size: 17px;
+  color: var(--muted);
+  margin: 30px 0 10px;
+}
+.web-novel-episodes a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-bottom: 1px solid var(--line);
+  padding: 16px 4px;
+  font-size: 18px;
+  line-height: 1.8;
+}
+.web-novel-episodes a span {
+  overflow-wrap: anywhere;
+}
+.web-novel-episodes a svg {
+  flex-shrink: 0;
+}
+.web-novel-episodes a:hover {
+  color: var(--green);
+  background: var(--soft);
+}
+.web-novel-load-state {
+  display: grid;
+  justify-items: start;
+  gap: 18px;
+  margin: 45px 0;
+}
+.web-novel-load-state h1,
+.web-novel-load-state p {
+  margin: 0;
+  line-height: 1.9;
+}
+.web-novel-load-state .web-novel-connection {
+  width: 100%;
+}
+.reader-work-info .web-novel-navigation .button {
+  font-size: 15px;
+  padding: 10px 14px;
+}
+@media (max-width: 600px) {
+  .hero-web-link {
+    margin-left: 16px;
+    font-size: 15px;
+  }
+  .web-novel-launcher {
+    padding: 22px 16px;
+    margin-bottom: 32px;
+  }
+  .web-novel-heading {
+    gap: 10px;
+  }
+  .web-novel-heading h2 {
+    font-size: 23px;
+  }
+  .web-novel-input-row {
+    flex-wrap: wrap;
+  }
+  .web-novel-input-row input {
+    flex-basis: 100%;
+  }
+  .web-novel-input-row .button {
+    width: 100%;
+    justify-content: center;
+  }
+  .web-novel-screen {
+    padding: 24px 18px;
+  }
+  .web-novel-screen h1 {
+    font-size: 26px;
+  }
+}

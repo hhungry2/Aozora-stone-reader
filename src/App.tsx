@@ -43,9 +43,19 @@ import {
   type CatalogSort,
 } from "./lib/catalog";
 import { fetchJson } from "./lib/data";
+import { clearWebNovelData } from "./lib/web-novel-client";
+import type { WebNovelInfo } from "./lib/web-novel";
+import {
+  WebNovelLauncher,
+  WebNovelNavigation,
+  WebNovelScreen,
+  webNovelHref,
+} from "./web/WebNovel";
 import { displayTitle } from "./lib/titles";
 import { readerStorage } from "./lib/state";
 import { usePagination } from "./reader/usePagination";
+import { useReadAloud } from "./reader/useReadAloud";
+import { ReaderSpeechControls } from "./reader/ReaderSpeechControls";
 import type { ReaderPageTurn } from "./reader/useDirectionTransition";
 import type {
   ScrollReaderHandle,
@@ -85,9 +95,17 @@ const formatMinutes = (characters: number) => {
 const palettes = ["pine", "clay", "slate", "olive", "wine", "ochre"];
 function getRoute() {
   const [screen, id] = location.hash.replace(/^#\/?/, "").split("/");
+  let routeId = id || "";
+  if (screen === "web") {
+    try {
+      routeId = decodeURIComponent(routeId);
+    } catch {
+      /* Report malformed URLs in the Web reader. */
+    }
+  }
   return {
     screen: screen === "works" ? "read" : screen || "library",
-    id: id || "",
+    id: routeId,
   };
 }
 function navigate(path: string) {
@@ -275,6 +293,9 @@ function About({
           書誌データ：青空文庫 / CC BY
           4.0（項目の抽出と形式変換を実施）。本文の権利状態とは区別して扱います。
         </p>
+        <p>
+          小説家になろう・カクヨムの作品は、URLを指定したページを公開元から取得して表示します。本文をこのサイトに収録・再配布することはありません。本文の著作権は各作品の権利者に帰属します。
+        </p>
         <h3>組版とライセンス</h3>
         <p>
           stone-engine.js 0.2.0 / MIT License
@@ -282,7 +303,9 @@ function About({
           Copyright © 2024 Nihon Design Center
         </p>
         <p className="fine-print">
-          React・React DOM / MIT、Lucide / ISC。各許諾文は以下に掲載しています。
+          Web小説の取得・抽出にはTxtMiruOnTheWeb（MIT、Copyright © 2021
+          gearsns）の処理を利用しています。 React・React DOM / MIT、Lucide /
+          ISC。各許諾文は以下に掲載しています。
         </p>
         <a
           className="external-link"
@@ -331,9 +354,11 @@ function About({
 function WorkDetails({
   book,
   onRestart,
+  webNovel,
 }: {
   book: Book;
   onRestart: () => void;
+  webNovel?: WebNovelInfo;
 }) {
   return (
     <div
@@ -358,14 +383,18 @@ function WorkDetails({
           target="_blank"
           rel="noreferrer"
         >
-          青空文庫の図書カード <ExternalLink size={14} />
+          {webNovel
+            ? `${webNovel.siteName}で原文を開く`
+            : "青空文庫の図書カード"}{" "}
+          <ExternalLink size={14} />
         </a>
         <button className="text-link" onClick={onRestart}>
           最初から読む <ArrowRight size={15} />
         </button>
       </div>
+      {webNovel && <WebNovelNavigation info={webNovel} />}
       <details className="reader-credits">
-        <summary>底本・制作情報</summary>
+        <summary>{webNovel ? "出典・作品情報" : "底本・制作情報"}</summary>
         <pre className="credits">{book.credits}</pre>
       </details>
       {book.conversion.warnings.length > 0 && (
@@ -869,6 +898,7 @@ export default function App() {
     document.documentElement.dataset.theme = settings.theme;
   }, [settings.theme]);
   useEffect(() => {
+    if (route.screen === "web" || catalog.length > 0) return;
     const abort = new AbortController();
     setCatalogError(false);
     fetchJson<CatalogEntry[]>(assetUrl("data/catalog.json.gz"), abort.signal)
@@ -877,7 +907,7 @@ export default function App() {
         if (e.name !== "AbortError") setCatalogError(true);
       });
     return () => abort.abort();
-  }, [retry]);
+  }, [retry, route.screen === "web"]);
   const catalogById = useMemo(
     () => new Map(catalog.map((entry) => [entry.id, entry])),
     [catalog],
@@ -987,9 +1017,11 @@ export default function App() {
   const openRead = (id: string) => {
     navigate(`/read/${id}`);
   };
-  const isReader = route.screen === "read";
+  const isWebReader = route.screen === "web";
+  const isReader = route.screen === "read" || isWebReader;
   const clear = () => {
     const cleared = readerStorage.clear();
+    clearWebNovelData();
     setSettings(defaultSettings);
     setRecordVersion((v) => v + 1);
     notify(
@@ -1032,7 +1064,27 @@ export default function App() {
           </div>
         </header>
       )}
-      {isReader ? (
+      {isWebReader ? (
+        <WebNovelScreen
+          key={route.id}
+          url={route.id}
+          renderReader={(webBook, info) => (
+            <ReaderBoundary key={webBook.id}>
+              <ReadingView
+                key={webBook.id}
+                book={webBook}
+                webNovel={info}
+                settings={settings}
+                onSettings={updateSettings}
+                onSave={updateRecord}
+                onAbout={() => setAbout(true)}
+                onNotify={notify}
+                storageVersion={recordVersion}
+              />
+            </ReaderBoundary>
+          )}
+        />
+      ) : isReader ? (
         selected ? (
           !selected.dataPath ? (
             <main id="main-content" tabIndex={-1} className="loading-view">
@@ -1163,6 +1215,19 @@ export default function App() {
               >
                 作品を探す <Search size={16} />
               </a>
+              <button
+                className="text-link hero-web-link"
+                onClick={() => {
+                  document
+                    .getElementById("web-novel-entry")
+                    ?.scrollIntoView({ behavior: "smooth" });
+                  document
+                    .getElementById("web-novel-url")
+                    ?.focus({ preventScroll: true });
+                }}
+              >
+                Web小説を開く <ArrowRight size={16} />
+              </button>
               <div className="hero-detail">
                 <span>
                   <BookOpen size={15} />
@@ -1216,6 +1281,7 @@ export default function App() {
               <span className="hero-circle" />
             </div>
           </section>
+          <WebNovelLauncher key={recordVersion} />
           {resume && (
             <section className="resume-strip">
               <div className="resume-icon">
@@ -1560,6 +1626,7 @@ export default function App() {
 
 function ReadingView({
   book,
+  webNovel,
   settings,
   onSettings,
   onSave,
@@ -1568,6 +1635,7 @@ function ReadingView({
   storageVersion,
 }: {
   book: Book;
+  webNovel?: WebNovelInfo;
   settings: ReaderSettings;
   onSettings: (s: ReaderSettings) => void;
   onSave: (id: string, record: ReadingRecord) => void;
@@ -1575,6 +1643,7 @@ function ReadingView({
   onNotify: (s: string) => void;
   storageVersion: number;
 }) {
+  const webNovelHasIndex = !!webNovel && webNovel.url !== webNovel.workUrl;
   const initial = useRef<{ anchor: Anchor; adjusted: boolean } | null>(null);
   if (!initial.current) {
     const previous = readerStorage.getRecord(book.id);
@@ -1592,6 +1661,7 @@ function ReadingView({
     onSettings(value);
   };
   const jumpTo = (value: Anchor) => {
+    speech.stop();
     setPageTurn(null);
     setAnchor(value);
   };
@@ -1673,6 +1743,26 @@ function ReadingView({
       ? (scrollLocation?.page ?? null)
       : stone.page;
   const pages = stone.pages;
+  const speech = useReadAloud({
+    book,
+    rate: settings.speechRate,
+    voiceURI: settings.speechVoiceURI,
+    onPosition: (target, position) => {
+      const visible = scrollMode
+        ? scrollReader.current?.getLocation()?.page
+        : page;
+      const end =
+        !cssMode && !scrollMode ? pages.at(-1)?.globalEnd : visible?.globalEnd;
+      if (
+        !visible ||
+        position < visible.globalStart ||
+        position >= (end ?? 0)
+      ) {
+        setPageTurn(null);
+        setAnchor(target);
+      }
+    },
+  });
   const loading = cssMode
     ? (cssLocation?.loading ?? true)
     : scrollMode
@@ -1823,6 +1913,7 @@ function ReadingView({
   const advance = useCallback(
     (next: boolean) => {
       if (loading || panel) return;
+      speech.stop();
       if (cssMode) {
         cssReader.current?.advance(next);
         return;
@@ -1849,6 +1940,7 @@ function ReadingView({
       nextAnchor,
       previousAnchor,
       settings.pageTurnAnimation,
+      speech.stop,
     ],
   );
   useEffect(() => {
@@ -1857,7 +1949,7 @@ function ReadingView({
         panel ||
         document.querySelector("dialog[open]") ||
         (event.target as HTMLElement).closest(
-          ".reader-settings,.reader-work-info,.reader-anatomy-panel,input,select,textarea,button,a,[contenteditable]",
+          ".reader-settings,.reader-work-info,.reader-anatomy-panel,.reader-speech,input,select,textarea,button,a,[contenteditable]",
         )
       )
         return;
@@ -2050,15 +2142,21 @@ function ReadingView({
       data-view={scrollMode ? "scroll" : "pages"}
     >
       <header className="reader-header">
-        <a href="#/" className="reader-back" aria-label="本棚へ">
+        <a
+          href={webNovelHasIndex ? webNovelHref(webNovel!.workUrl) : "#/"}
+          className="reader-back"
+          aria-label={webNovelHasIndex ? "作品の目次へ" : "本棚へ"}
+        >
           <ArrowLeft size={19} />
-          <span>本棚へ</span>
+          <span>{webNovelHasIndex ? "目次へ" : "本棚へ"}</span>
         </a>
         <div className="reader-title">
           <strong>{displayTitle(book.title)}</strong>
           <span className="reader-title-meta">
             <span style={{ visibility: loading ? "hidden" : undefined }}>
-              {book.authorLabel}
+              {webNovel?.episodeTitle
+                ? `${webNovel.episodeTitle} · ${book.authorLabel}`
+                : book.authorLabel}
             </span>
             {loading && (
               <span
@@ -2165,8 +2263,13 @@ function ReadingView({
           </button>
         </div>
       </header>
-      <div className="reader-view-bar" hidden={cssMode}>
-        <div className="reader-view-toggle" role="group" aria-label="読み方">
+      <div className="reader-view-bar">
+        <div
+          className="reader-view-toggle"
+          role="group"
+          aria-label="読み方"
+          hidden={cssMode}
+        >
           <button
             aria-label="ページ表示"
             aria-pressed={!scrollMode}
@@ -2183,12 +2286,23 @@ function ReadingView({
           </button>
         </div>
         {scrollMode && (
-          <span>
+          <span className="reader-scroll-hint">
             {vertical
               ? "右から左へ、つづけて読む"
               : "下へスクロールして、つづけて読む"}
           </span>
         )}
+        <ReaderSpeechControls
+          speech={speech}
+          settings={settings}
+          onSettings={onSettings}
+          getAnchor={() =>
+            scrollMode
+              ? (scrollReader.current?.getAnchor() ?? page?.start ?? anchor)
+              : (page?.start ?? anchor)
+          }
+          disabled={!page || loading || !!error}
+        />
       </div>
       <div className="reader-workspace">
         <main id="main-content" tabIndex={-1} className="reader-main">
@@ -2200,6 +2314,7 @@ function ReadingView({
           >
             <WorkDetails
               book={book}
+              webNovel={webNovel}
               onRestart={() => {
                 jumpTo(createAnchor(book, book.blocks[0].id, 0));
                 setInfoOpen(false);
@@ -2312,7 +2427,10 @@ function ReadingView({
                   target="_blank"
                   rel="noreferrer"
                 >
-                  青空文庫で原文を開く <ExternalLink size={14} />
+                  {webNovel
+                    ? `${webNovel.siteName}で原文を開く`
+                    : "青空文庫で原文を開く"}{" "}
+                  <ExternalLink size={14} />
                 </a>
               </div>
             )}
@@ -2329,8 +2447,16 @@ function ReadingView({
                   <Check size={14} />
                   読み終わり{" "}
                   <button className="text-link" onClick={openInfo}>
-                    底本・制作情報
+                    {webNovel ? "出典・作品情報" : "底本・制作情報"}
                   </button>
+                  {webNovel?.nextUrl && (
+                    <a
+                      className="text-link"
+                      href={webNovelHref(webNovel.nextUrl)}
+                    >
+                      次の話へ <ArrowRight size={14} />
+                    </a>
+                  )}
                 </>
               ) : null}
               {!cssMode &&
@@ -2451,7 +2577,7 @@ function ReadingView({
             <span className="page-controls-divider" />
             {vertical ? previous : next}
           </div>
-          {book.toc.length > 0 && (
+          {(book.toc.length > 0 || webNovelHasIndex) && (
             <button
               className="toolbar-toc"
               aria-label="目次を開く"
@@ -2463,8 +2589,9 @@ function ReadingView({
           )}
         </div>
       </footer>
-      {panel === "toc" && book.toc.length > 0 && (
+      {panel === "toc" && (book.toc.length > 0 || webNovelHasIndex) && (
         <Modal title="目次" onClose={() => setPanel(null)}>
+          {webNovel && <WebNovelNavigation info={webNovel} />}
           <div className="toc-list">
             <button
               onClick={() => {
@@ -2490,7 +2617,8 @@ function ReadingView({
             ))}
           </div>
           <button className="text-link" onClick={openInfo}>
-            底本・制作情報を読む <Info size={14} />
+            {webNovel ? "出典・作品情報を読む" : "底本・制作情報を読む"}{" "}
+            <Info size={14} />
           </button>
         </Modal>
       )}

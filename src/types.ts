@@ -148,6 +148,8 @@ export interface ReaderSettings {
   showFrames: boolean;
   theme: "paper" | "light" | "dark";
   ruby: boolean;
+  speechRate: number;
+  speechVoiceURI: string;
 }
 
 export interface Bookmark {
@@ -186,4 +188,6 @@ export const defaultSettings: ReaderSettings = {
   showFrames: true,
   theme: "paper",
   ruby: true,
+  speechRate: 1,
+  speechVoiceURI: "",
 };

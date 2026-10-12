@@ -1,4 +1,4 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { copyFile, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const packages = [
@@ -25,4 +25,18 @@ for (const name of packages) {
     `\n${"=".repeat(72)}\n${name} ${metadata.version}\n${"=".repeat(72)}\n${license}`,
   );
 }
-await writeFile(resolve("public/licenses.txt"), `${notices.join("\n").trimEnd()}\n`);
+const txtMiruLicense = await readFile(
+  resolve("third_party/TxtMiruOnTheWeb/LICENSE"),
+  "utf8",
+);
+notices.push(
+  `\n${"=".repeat(72)}\nTxtMiruOnTheWeb (adapted site adapters and HTML relay)\nhttps://github.com/gearsns/TxtMiruOnTheWeb\nUpstream: da2c63591aa9ac0db1d0823e8f5bfb962eeaef63\n${"=".repeat(72)}\n${txtMiruLicense}`,
+);
+await writeFile(
+  resolve("public/licenses.txt"),
+  `${notices.join("\n").trimEnd()}\n`,
+);
+await copyFile(
+  resolve("server/google-apps-script/Code.gs"),
+  resolve("public/web-novel-proxy.gs.txt"),
+);

@@ -255,7 +255,6 @@ test("narrow CSS reading ignores Stone preparation and spread settings while ref
     const position = await anchorPosition(page, "000127");
     await openSettings(page);
     for (const label of [
-      "ページ表示",
       "ページの準備",
       "約物",
       "行の寄せ",
@@ -265,9 +264,14 @@ test("narrow CSS reading ignores Stone preparation and spread settings while ref
         settingsPanel(page).getByLabel(label, { exact: true }),
       ).toBeDisabled();
     }
-    await expect(
-      settingsPanel(page).getByLabel("ページ表示", { exact: true }),
-    ).toHaveValue("spread");
+    await expect(page.locator(".page-layout-toggle")).toBeHidden();
+    expect(
+      await page.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem("aozora-stone-reader:v1:settings")!)
+            .pageLayout,
+      ),
+    ).toBe("spread");
     await expect(
       settingsPanel(page).getByLabel("ページの準備", { exact: true }),
     ).toHaveValue("all");

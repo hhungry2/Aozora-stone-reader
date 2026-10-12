@@ -19,6 +19,7 @@ import {
 import { createPortal } from "react-dom";
 import { fontFamilies, type ReaderSettings } from "../types";
 import type { ReaderPageData } from "./engine";
+import { readerImageUrl } from "../lib/assets";
 import {
   useDirectionTransition,
   type ReaderPageTurn,
@@ -351,7 +352,7 @@ export const ReaderPage = memo(function ReaderPage({
           {page.images.map((image, index) => (
             <image
               key={index}
-              href={`${import.meta.env.BASE_URL}${image.src.replace(/^\//u, '')}`}
+              href={readerImageUrl(image.src)}
               x={image.x}
               y={image.y}
               width={image.width}

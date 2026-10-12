@@ -23,6 +23,20 @@ const record = (date = '2026-10-09T10:00:00.000Z'): ReadingRecord => ({
 });
 
 describe('reader state persistence', () => {
+  it('migrates, validates and persists speech preferences', () => {
+    const disk = new MemoryStorage();
+    const { speechRate: _rate, speechVoiceURI: _voice, ...earlier } = defaultSettings;
+    disk.setItem(`${STORAGE_PREFIX}settings`, JSON.stringify({ ...earlier, settingsVersion: 2, theme: 'dark' }));
+    const migrated = createReaderStorage(disk);
+    expect(migrated.getSettings()).toEqual({ ...defaultSettings, theme: 'dark' });
+    expect(migrated.getStatus().corrupted).toBe(false);
+    migrated.saveSettings({ ...migrated.getSettings(), speechRate: 1.4, speechVoiceURI: 'test-ja' });
+    expect(createReaderStorage(disk).getSettings()).toMatchObject({ speechRate: 1.4, speechVoiceURI: 'test-ja', theme: 'dark' });
+    disk.setItem(`${STORAGE_PREFIX}settings`, JSON.stringify({ ...defaultSettings, speechRate: 50, speechVoiceURI: {}, theme: 'dark' }));
+    const invalid = createReaderStorage(disk);
+    expect(invalid.getSettings()).toEqual({ ...defaultSettings, theme: 'dark' });
+    expect(invalid.getStatus().corrupted).toBe(true);
+  });
   it('uses stone rendering by default for a new reader', () => {
     const state = createReaderStorage(new MemoryStorage());
     expect(state.getSettings().renderingMode).toBe('stone');

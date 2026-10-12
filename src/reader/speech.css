@@ -1,0 +1,139 @@
+.reader-speech {
+  position: relative;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--text);
+}
+.reader-speech > button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  font-size: 11px;
+}
+.speech-play {
+  min-width: 88px;
+  padding: 0 8px;
+}
+.speech-options,
+.speech-stop {
+  width: 36px;
+}
+.reader-speech > button:hover:enabled,
+.reader-speech[data-status="speaking"] .speech-play {
+  color: var(--green);
+}
+.reader-speech button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.speech-panel,
+.speech-error {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  width: min(320px, calc(100vw - 24px));
+  max-height: calc(100dvh - 130px);
+  overflow-y: auto;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: 0 6px 24px #0002;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.speech-panel-head,
+.speech-rate-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.speech-panel-head {
+  margin-top: -8px;
+}
+.speech-panel-head button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-right: -8px;
+}
+.speech-panel p {
+  margin: 6px 0 12px;
+}
+.speech-panel label {
+  display: block;
+}
+.speech-panel select {
+  width: 100%;
+  min-height: 44px;
+  margin: 6px 0 12px;
+  padding: 8px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.speech-panel input[type="range"] {
+  width: 100%;
+  height: 44px;
+  accent-color: var(--green);
+}
+.speech-rate-label output {
+  font-variant-numeric: tabular-nums;
+}
+.speech-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 6px 0 12px;
+}
+.speech-panel-actions .button {
+  padding: 8px 12px;
+  min-height: 44px;
+  font-size: 12px;
+}
+.speech-panel .speech-excerpt {
+  max-height: 100px;
+  overflow-y: auto;
+  padding: 8px;
+  background: var(--soft);
+  overflow-wrap: anywhere;
+}
+.speech-panel .speech-help {
+  color: var(--muted);
+  font-size: 11px;
+}
+.speech-error {
+  z-index: 31;
+  top: calc(100% + 8px);
+}
+.reader-speech:has(.speech-panel) .speech-error {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+.reader-view-toggle[hidden] {
+  display: none;
+}
+@media (max-width: 560px) {
+  .reader-view-bar > .reader-scroll-hint {
+    display: none;
+  }
+  .reader-speech > button {
+    font-size: 10px;
+  }
+  .speech-play {
+    min-width: 78px;
+    padding: 0 4px;
+  }
+  .speech-options,
+  .speech-stop {
+    width: 30px;
+  }
+}

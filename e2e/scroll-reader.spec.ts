@@ -403,6 +403,8 @@ test("a million-character book mounts only nearby SVG chunks and jumps directly 
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/#/read/000127");
+  // Allow the large intercepted JSON fixture to arrive before timing the layout.
+  await expect(page.getByTestId("reader")).toBeVisible({ timeout: 60_000 });
   await ready(page, "scroll");
   await expectBoundedDocument(page);
   await expect(page.getByTestId("pagination-preload")).toHaveCount(0);
