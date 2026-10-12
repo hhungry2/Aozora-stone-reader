@@ -26,6 +26,9 @@ export interface BookIndex {
 
 export interface RubyPlacement {
   key: string;
+  /** Original parent and reading offsets, independent of line wrapping. */
+  sourceStart: number;
+  readingOffset: number;
   reading: string;
   glyphs: GlyphElement[];
   x: number;
@@ -436,6 +439,7 @@ export class PaginationEngine {
       lines.forEach((line, lineIndex) => {
         const group = runs.filter((run) => run.line === line);
         const count = lineIndex === lines.length - 1 ? reading.length - used : Math.round(reading.length * group.length / runs.length);
+        const readingOffset = reading.slice(0, used).join('').length;
         const part = reading.slice(used, used + count).join(''); used += count;
         if (!part || !group.length) return;
         const left = Math.min(...group.map((run) => run.frame.x));
@@ -454,7 +458,8 @@ export class PaginationEngine {
         // Readings stay within their parent's inline extent: adjacent ruby cannot collide.
         const scale = size > 0 ? Math.min(1, available / size) : 1;
         page.rubies.push({
-          key: `${ruby.start}-${line}`, reading: part, glyphs: glyphElements(rubyContext),
+          key: `${ruby.start}-${line}`, sourceStart: page.globalStart + ruby.start, readingOffset,
+          reading: part, glyphs: glyphElements(rubyContext),
           x: vertical ? right + f * 0.08 : left + (available - size * scale) / 2,
           y: vertical ? top + (available - size * scale) / 2 : top - f * 0.6,
           scaleX: vertical ? 1 : scale, scaleY: vertical ? scale : 1,

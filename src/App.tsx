@@ -1916,7 +1916,21 @@ function ReadingView({
         </a>
         <div className="reader-title">
           <strong>{displayTitle(book.title)}</strong>
-          <span>{book.authorLabel}</span>
+          <span className="reader-title-meta">
+            <span style={{ visibility: loading ? "hidden" : undefined }}>
+              {book.authorLabel}
+            </span>
+            {loading && (
+              <span
+                className="reader-loading"
+                role="status"
+                aria-label="文字を整えています"
+              >
+                <LoaderCircle className="spin" size={12} aria-hidden="true" />
+                <span aria-hidden="true">準備中</span>
+              </span>
+            )}
+          </span>
         </div>
         <div className="reader-header-actions">
           <div
@@ -2090,15 +2104,6 @@ function ReadingView({
                   </Suspense>
                 </div>
               )
-            )}
-            {loading && (
-              <div
-                className={`reader-loading ${page ? "subtle" : ""}`}
-                role="status"
-              >
-                <LoaderCircle className="spin" size={25} />
-                <span>文字を整えています</span>
-              </div>
             )}
             {error && (
               <div className="reader-error" role="alert">

@@ -1540,6 +1540,13 @@ button {
   color: var(--muted);
   white-space: nowrap;
 }
+.reader-title > .reader-title-meta {
+  display: grid;
+  min-width: 0;
+}
+.reader-title-meta > span {
+  grid-area: 1 / 1;
+}
 .reader-header-actions {
   display: flex;
   align-items: center;
@@ -1854,7 +1861,6 @@ button {
   height: 100%;
   overflow: hidden;
   color: var(--text);
-  animation: page-in 0.15s ease-out;
 }
 .reader-page-wrap > div {
   max-width: 100%;
@@ -1879,8 +1885,15 @@ button {
   gap: 24px;
   justify-content: center;
 }
-.vertical .reader-pages.spread {
+.reader-pages[data-direction="tbRl"].spread {
   flex-direction: row-reverse;
+}
+.reader-pages[data-direction-transition="running"] [data-reader-content] {
+  visibility: hidden;
+}
+.reader-direction-overlay {
+  pointer-events: none;
+  user-select: none;
 }
 .reader-pages.spread::after {
   content: "";
@@ -2005,19 +2018,20 @@ button {
   background: var(--line);
 }
 .reader-loading {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 18px;
-  font-size: 11px;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
   color: var(--muted);
-  background: var(--bg);
+  pointer-events: none;
 }
-.reader-loading.subtle {
-  background: color-mix(in srgb, var(--bg) 85%, transparent);
+.reader-loading > svg {
+  flex-shrink: 0;
+}
+.reader-loading > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .reader-error {
   position: absolute;
@@ -2041,14 +2055,6 @@ button {
   clip-path: none;
   padding: 12px;
   background: var(--surface);
-}
-@keyframes page-in {
-  from {
-    opacity: 0.6;
-  }
-  to {
-    opacity: 1;
-  }
 }
 @media (min-width: 1500px) {
   .hero {

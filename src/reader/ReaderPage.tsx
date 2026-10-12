@@ -1,15 +1,30 @@
-import { handleStoneCopy, runRangeOfSelection, textOfRunRange, type GlyphElement } from '@non-standardworld/stone-engine.js';
+import { handleStoneCopy, runRangeOfSelection, splitGraphemes, textOfRunRange, type GlyphElement } from '@non-standardworld/stone-engine.js';
 import { memo, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { fontFamilies, type ReaderSettings } from '../types';
 import type { ReaderPageData } from './engine';
+import { useDirectionTransition } from './useDirectionTransition';
 
-function Glyphs({ glyphs, prefix = '' }: { glyphs: GlyphElement[]; prefix?: string }) {
+function Glyphs({ glyphs, prefix = '', sources }: { glyphs: GlyphElement[]; prefix?: string; sources: Map<number, string> }) {
   return <text xmlSpace="preserve" fill="currentColor">{glyphs.map((glyph) => <tspan
     key={`${prefix}${glyph.runId}`} data-run={prefix ? undefined : glyph.runId}
+    data-source={sources.get(glyph.runId)}
     x={glyph.x} y={glyph.y} rotate={glyph.rotate || undefined}
     fontFamily={glyph.fontFamily} fontSize={glyph.fontSize} fontWeight={glyph.fontWeight} fontStyle={glyph.fontStyle}
     style={{ fontFeatureSettings: glyph.vertical ? (glyph.fullWidth ? '"fwid" 1, "vert" 1, "vrt2" 1' : '"vert" 1, "vrt2" 1') : glyph.fullWidth ? '"fwid" 1' : undefined }}
   >{glyph.text}</tspan>)}</text>;
+}
+
+function glyphSources(glyphs: GlyphElement[], prefix: string, start = 0, reading?: string) {
+  const sources = new Map<number, string>();
+  if (reading !== undefined) {
+    splitGraphemes(reading).forEach((char, index) => {
+      sources.set(index, `${prefix}${start}`);
+      start += char.length;
+    });
+  } else {
+    for (const glyph of glyphs) sources.set(glyph.runId, `${prefix}${glyph.runId}`);
+  }
+  return sources;
 }
 
 function AccessibleText({ page, settings }: { page: ReaderPageData; settings: ReaderSettings }) {
@@ -54,6 +69,12 @@ function AccessibleText({ page, settings }: { page: ReaderPageData; settings: Re
 export function ReaderPage({ page, settings, className }: { page: ReaderPageData; settings: ReaderSettings; className?: string }) {
   const svg = useRef<SVGSVGElement>(null);
   const root = useRef<HTMLDivElement>(null);
+  const bodySources = new Map<number, string>();
+  let sourceOffset = page.globalStart;
+  page.context.runs.forEach((run, index) => {
+    bodySources.set(index, `body:${sourceOffset}`);
+    sourceOffset += run.char.length;
+  });
   useLayoutEffect(() => {
     const container = root.current;
     return () => {
@@ -90,20 +111,20 @@ export function ReaderPage({ page, settings, className }: { page: ReaderPageData
       <p>{page.opening.author}</p>
     </header>}
     <svg ref={svg} width={page.width} height={page.height} viewBox={`0 0 ${page.width} ${page.height}`}
-      aria-hidden="true" focusable="false" data-stone-direction={settings.direction} data-start={page.globalStart} data-end={page.globalEnd}
+      aria-hidden="true" focusable="false" data-stone-direction={page.context.direction} data-start={page.globalStart} data-end={page.globalEnd}
       style={{ display: 'block', overflow: 'visible', userSelect: 'text', maxWidth: '100%' }}>
-      {page.opening && <g className="reader-opening" transform={`translate(${page.opening.x} ${page.opening.y}) scale(${page.opening.scale})`}>
-        <Glyphs glyphs={page.opening.glyphs} prefix="opening-" />
+      {page.opening && <g className="reader-opening" data-reader-content="" transform={`translate(${page.opening.x} ${page.opening.y}) scale(${page.opening.scale})`}>
+        <Glyphs glyphs={page.opening.glyphs} prefix="opening-" sources={glyphSources(page.opening.glyphs, 'opening:')} />
       </g>}
-      <g transform={`translate(${page.insetX} ${page.insetY})`}>
+      <g data-reader-content="" transform={`translate(${page.insetX} ${page.insetY})`}>
         {settings.showFrames && <g className="reader-glyph-frames" fill="none" stroke="rgba(0,128,255,0.6)" strokeWidth="0.7" pointerEvents="none" style={{ userSelect: 'none' }}>
           {page.context.runs.filter((run) => !run.isNewline).map((run, index) => <rect key={index}
             x={run.frame.x} y={run.frame.y} width={run.frame.width} height={run.frame.height} />)}
         </g>}
-        <Glyphs glyphs={page.glyphs} />
+        <Glyphs glyphs={page.glyphs} sources={bodySources} />
         <g className="reader-rubies" style={{ userSelect: 'none' }}>{page.rubies.map((ruby) => <g key={ruby.key}
           transform={`translate(${ruby.x} ${ruby.y}) scale(${ruby.scaleX} ${ruby.scaleY})`}>
-          <Glyphs glyphs={ruby.glyphs} prefix={`${ruby.key}-`} />
+          <Glyphs glyphs={ruby.glyphs} prefix={`${ruby.key}-`} sources={glyphSources(ruby.glyphs, `ruby:${ruby.sourceStart}:`, ruby.readingOffset, ruby.reading)} />
         </g>)}</g>
         <g style={{ userSelect: 'none' }}>{page.emphasis.map((point, index) => <circle key={index} cx={point.x} cy={point.y} r={point.radius} fill="currentColor" />)}</g>
         {page.images.map((image, index) => <image key={index} href={`${import.meta.env.BASE_URL}${image.src.replace(/^\//u, '')}`}
@@ -116,6 +137,7 @@ export function ReaderPage({ page, settings, className }: { page: ReaderPageData
 
 export const ReaderPages = memo(function ReaderPages({ pages, settings, spread }: { pages: ReaderPageData[]; settings: ReaderSettings; spread: boolean }) {
   const root = useRef<HTMLDivElement>(null);
+  useDirectionTransition(root, pages, settings.showFrames);
   useLayoutEffect(() => {
     const container = root.current;
     return () => {
@@ -124,7 +146,7 @@ export const ReaderPages = memo(function ReaderPages({ pages, settings, spread }
         && container.contains(selection.anchorNode) && container.contains(selection.focusNode)) selection.removeAllRanges();
     };
   }, [pages]);
-  return <div ref={root} className={`reader-pages${spread ? ' spread' : ''}`} onCopy={(event) => {
+  return <div ref={root} className={`reader-pages${spread ? ' spread' : ''}`} data-direction={pages[0]?.context.direction} onCopy={(event) => {
     if (event.defaultPrevented || pages.length < 2 || !event.clipboardData) return;
     const container = event.currentTarget;
     const selection = container.ownerDocument.getSelection();

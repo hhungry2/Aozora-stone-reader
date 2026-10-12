@@ -14,6 +14,46 @@ function fixture(blocks: Partial<TextBlock>[]): Book {
   };
 }
 
+it('keeps long ruby identities stable across different line splits using UTF-16 reading offsets', () => {
+  const prefix = '　前書𠮷。';
+  const parent = '長い親文字列を異なる行に分けても対応を保つ';
+  const reading = 'よ𠮷か\u3099 み'.repeat(8);
+  const book = fixture([{ text: '先行する段落𠮷。' }, {
+    text: prefix + parent + '終わり。',
+    rubies: [{ start: prefix.length, end: prefix.length + parent.length, reading }],
+  }]);
+  const sourceStart = indexBook(book).ranges[1].start + prefix.length;
+  const layouts = (['tbRl', 'lrTb'] as const).map((direction) => {
+    const page = new PaginationEngine(book, {
+      ...defaultSettings, direction, dividesByWords: false,
+    }, 220, 300, new FixedMeasurer()).pageAt({ blockId: 'p1', offset: 0, context: '' });
+    expect(page.rubies.length).toBeGreaterThan(1);
+    expect(page.rubies.map((ruby) => ruby.reading).join('')).toBe(reading);
+    let offset = 0;
+    for (const ruby of page.rubies) {
+      expect(ruby.sourceStart).toBe(sourceStart);
+      expect(ruby.readingOffset).toBe(offset);
+      expect(reading.slice(ruby.readingOffset, ruby.readingOffset + ruby.reading.length)).toBe(ruby.reading);
+      offset += ruby.reading.length;
+    }
+    // Supplementary characters and combining marks make UTF-16 offsets differ
+    // from the number of graphemes; spaces also count even when not painted.
+    expect(page.rubies[1].readingOffset).toBeGreaterThan(splitGraphemes(page.rubies[0].reading).length);
+    const identities = page.rubies.flatMap((ruby) => {
+      let offset = ruby.readingOffset;
+      return splitGraphemes(ruby.reading).map((char) => {
+        const identity = `${ruby.sourceStart}:${offset}`;
+        offset += char.length;
+        return identity;
+      });
+    });
+    expect(new Set(identities).size).toBe(identities.length);
+    return { parts: page.rubies.map((ruby) => ruby.reading), identities };
+  });
+  expect(layouts[0].parts).not.toEqual(layouts[1].parts);
+  expect(layouts[0].identities).toEqual(layouts[1].identities);
+});
+
 for (const direction of ['tbRl', 'lrTb'] as const) describe(`Stone pagination ${direction}`, () => {
   it('cleans the displayed opening title while preserving the source title and body anchors', () => {
     const book = fixture([{ text: '元の本文。'.repeat(80) }]);
