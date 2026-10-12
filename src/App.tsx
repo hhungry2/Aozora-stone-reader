@@ -1215,19 +1215,21 @@ export default function App() {
               >
                 作品を探す <Search size={16} />
               </a>
-              <button
-                className="text-link hero-web-link"
-                onClick={() => {
-                  document
-                    .getElementById("web-novel-entry")
-                    ?.scrollIntoView({ behavior: "smooth" });
-                  document
-                    .getElementById("web-novel-url")
-                    ?.focus({ preventScroll: true });
-                }}
-              >
-                Web小説を開く <ArrowRight size={16} />
-              </button>
+              {import.meta.env.DEV && (
+                <button
+                  className="text-link hero-web-link"
+                  onClick={() => {
+                    document
+                      .getElementById("web-novel-entry")
+                      ?.scrollIntoView({ behavior: "smooth" });
+                    document
+                      .getElementById("web-novel-url")
+                      ?.focus({ preventScroll: true });
+                  }}
+                >
+                  Web小説を開く <ArrowRight size={16} />
+                </button>
+              )}
               <div className="hero-detail">
                 <span>
                   <BookOpen size={15} />
@@ -1281,7 +1283,7 @@ export default function App() {
               <span className="hero-circle" />
             </div>
           </section>
-          <WebNovelLauncher key={recordVersion} />
+          {import.meta.env.DEV && <WebNovelLauncher key={recordVersion} />}
           {resume && (
             <section className="resume-strip">
               <div className="resume-icon">
