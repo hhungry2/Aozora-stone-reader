@@ -29,6 +29,7 @@ import {
   Moon,
   Plus,
   Search,
+  ScanText,
   Settings2,
   Sun,
   Trash2,
@@ -45,6 +46,11 @@ import { fetchJson } from "./lib/data";
 import { displayTitle } from "./lib/titles";
 import { readerStorage } from "./lib/state";
 import { usePagination } from "./reader/usePagination";
+import type { ReaderPageTurn } from "./reader/useDirectionTransition";
+import type {
+  ScrollReaderHandle,
+  ScrollReaderLocation,
+} from "./reader/ScrollReader";
 import {
   CssReader,
   type CssReaderHandle,
@@ -63,6 +69,9 @@ import {
 
 const ReaderPages = lazy(async () => ({
   default: (await import("./reader/ReaderPage")).ReaderPages,
+}));
+const ScrollReader = lazy(async () => ({
+  default: (await import("./reader/ScrollReader")).ScrollReader,
 }));
 
 const assetUrl = (path: string) =>
@@ -597,6 +606,7 @@ function SettingsPanel({
     value: ReaderSettings[K],
   ) => onChange({ ...settings, [key]: value });
   const cssMode = settings.renderingMode === "css";
+  const scrollMode = !cssMode && settings.viewMode === "scroll";
   return (
     <div className="settings-content">
       <div className="setting-group">
@@ -621,28 +631,30 @@ function SettingsPanel({
             : "stone-engine.js で組版し、SVG で表示します。CSS モードに切り替えて同じ本文を比較できます。"}
         </p>
       </div>
-      <div className="setting-group">
-        <label htmlFor="page-layout">ページ表示</label>
-        <select
-          id="page-layout"
-          disabled={cssMode}
-          value={settings.pageLayout}
-          onChange={(event) =>
-            set(
-              "pageLayout",
-              event.target.value as ReaderSettings["pageLayout"],
-            )
-          }
+      <div className="setting-group switch-group">
+        <div>
+          <label htmlFor="page-turn-animation">文字がほどけるページ送り</label>
+          <p id="page-turn-animation-note">
+            列や行ごとに文字が消え、次の文章が並びます
+          </p>
+        </div>
+        <button
+          id="page-turn-animation"
+          className={`switch ${settings.pageTurnAnimation ? "on" : ""}`}
+          role="switch"
+          aria-checked={settings.pageTurnAnimation}
+          aria-describedby="page-turn-animation-note"
+          disabled={cssMode || scrollMode}
+          onClick={() => set("pageTurnAnimation", !settings.pageTurnAnimation)}
         >
-          <option value="single">1ページ</option>
-          <option value="spread">見開き（横長の画面で2ページ）</option>
-        </select>
+          <span />
+        </button>
       </div>
       <div className="setting-group">
         <label htmlFor="pagination-mode">ページの準備</label>
         <select
           id="pagination-mode"
-          disabled={cssMode}
+          disabled={cssMode || scrollMode}
           value={settings.paginationMode}
           onChange={(event) =>
             set(
@@ -659,11 +671,13 @@ function SettingsPanel({
         <p id="pagination-mode-note" className="fine-print">
           {cssMode
             ? "CSS モードでは本文全体をブラウザが配置します。見開きと先読みは Stone モードで利用できます。"
-            : settings.paginationMode === "all"
-              ? "読書を続けながら作品全体を準備します。長い作品ほど時間とメモリを使います。"
-              : settings.paginationMode === "batch"
-                ? "現在位置から先の10ページを準備し、読み進めるたびに補充します。"
-                : "表示するページと次の1ページを準備します。"}
+            : scrollMode
+              ? "スクロール表示は画面付近の本文だけを準備します。ページの先読み設定はページ表示で利用できます。"
+              : settings.paginationMode === "all"
+                ? "読書を続けながら作品全体を準備します。長い作品ほど時間とメモリを使います。"
+                : settings.paginationMode === "batch"
+                  ? "現在位置から先の10ページを準備し、読み進めるたびに補充します。"
+                  : "表示するページと次の1ページを準備します。"}
         </p>
       </div>
       <div className="setting-group">
@@ -1569,12 +1583,45 @@ function ReadingView({
       : { anchor: createAnchor(book, book.blocks[0].id, 0), adjusted: false };
   }
   const [anchor, setAnchor] = useState<Anchor>(initial.current.anchor);
+  const [pageTurn, setPageTurn] = useState<ReaderPageTurn | null>(null);
+  const [anatomyMode, setAnatomyMode] = useState(false);
+  const changeSettings = (value: ReaderSettings) => {
+    const visibleAnchor = scrollReader.current?.getAnchor();
+    if (visibleAnchor) setAnchor(visibleAnchor);
+    setPageTurn(null);
+    onSettings(value);
+  };
+  const jumpTo = (value: Anchor) => {
+    setPageTurn(null);
+    setAnchor(value);
+  };
   const [panel, setPanel] = useState<"toc" | "bookmarks" | null>(null);
   const [infoOpen, setInfoOpen] = useState(false);
   const info = useRef<HTMLDivElement>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const cssMode = settings.renderingMode === "css";
+  const scrollMode = !cssMode && settings.viewMode === "scroll";
+  const scrollReader = useRef<ScrollReaderHandle>(null);
+  const [scrollLocation, setScrollLocation] =
+    useState<ScrollReaderLocation | null>(null);
+  const onScrollLocationChange = useCallback(
+    (location: ScrollReaderLocation) => {
+      setScrollLocation(location);
+      if (location.page && !location.loading && !location.error) {
+        const start = location.page.start;
+        setAnchor((current) =>
+          current.blockId === start.blockId && current.offset === start.offset
+            ? current
+            : start,
+        );
+      }
+    },
+    [],
+  );
+  useEffect(() => {
+    if (!scrollMode) setScrollLocation(null);
+  }, [scrollMode]);
   const cssReader = useRef<CssReaderHandle>(null);
   const [cssLocation, setCssLocation] = useState<CssReaderLocation | null>(
     null,
@@ -1600,6 +1647,7 @@ function ReadingView({
   );
   const spread =
     !cssMode &&
+    !scrollMode &&
     settings.pageLayout === "spread" &&
     landscape &&
     size.width >= 600;
@@ -1617,29 +1665,58 @@ function ReadingView({
     height: size.height,
     anchor,
     pageCount,
-    enabled: !cssMode,
+    enabled: !cssMode && !scrollMode,
   });
-  const page = cssMode ? (cssLocation?.page ?? null) : stone.page;
+  const page = cssMode
+    ? (cssLocation?.page ?? null)
+    : scrollMode
+      ? (scrollLocation?.page ?? null)
+      : stone.page;
   const pages = stone.pages;
-  const loading = cssMode ? (cssLocation?.loading ?? true) : stone.loading;
-  const error = cssMode ? (cssLocation?.error ?? null) : stone.error;
+  const loading = cssMode
+    ? (cssLocation?.loading ?? true)
+    : scrollMode
+      ? (scrollLocation?.loading ?? true)
+      : stone.loading;
+  const error = cssMode
+    ? (cssLocation?.error ?? null)
+    : scrollMode
+      ? (scrollLocation?.error ?? null)
+      : stone.error;
   const nextAnchor = cssMode
     ? cssLocation?.hasNext
       ? (page?.end ?? null)
       : null
-    : stone.nextAnchor;
+    : scrollMode
+      ? scrollLocation?.hasNext
+        ? (page?.end ?? null)
+        : null
+      : stone.nextAnchor;
   const previousAnchor = cssMode
     ? cssLocation?.hasPrevious
       ? (page?.start ?? null)
       : null
-    : stone.previousAnchor;
-  const progress = cssMode ? (cssLocation?.progress ?? 0) : stone.progress;
-  const isEnd = cssMode ? (cssLocation?.isEnd ?? false) : stone.isEnd;
+    : scrollMode
+      ? scrollLocation?.hasPrevious
+        ? (page?.start ?? null)
+        : null
+      : stone.previousAnchor;
+  const progress = cssMode
+    ? (cssLocation?.progress ?? 0)
+    : scrollMode
+      ? (scrollLocation?.progress ?? 0)
+      : stone.progress;
+  const isEnd = cssMode
+    ? (cssLocation?.isEnd ?? false)
+    : scrollMode
+      ? (scrollLocation?.isEnd ?? false)
+      : stone.isEnd;
   const preload = stone.preload;
   const retryLayout = useCallback(() => {
     if (cssMode) cssReader.current?.retry();
+    else if (scrollMode) scrollReader.current?.retry();
     else stone.retry();
-  }, [cssMode, stone.retry]);
+  }, [cssMode, scrollMode, stone.retry]);
   const record = readerStorage.getRecord(book.id);
   const bookmarks = record?.bookmarks || [];
   const vertical = settings.direction === "tbRl";
@@ -1712,10 +1789,37 @@ function ReadingView({
       contentVersion: book.contentVersion,
       anchor: page.start,
       updatedAt: new Date().toISOString(),
-      progress: isEnd ? 1 : anchorProgress(book, page.start),
+      progress: isEnd
+        ? 1
+        : scrollMode
+          ? progress
+          : anchorProgress(book, page.start),
       bookmarks: previous?.bookmarks || [],
     });
-  }, [page, loading, isEnd, book, onSave]);
+  }, [page, loading, isEnd, book, onSave, scrollMode, progress]);
+  useEffect(() => {
+    if (!scrollMode) return;
+    // Persist the last native scroll movement even if navigation happens before
+    // the throttled location notification reaches React.
+    const saveVisiblePosition = () => {
+      const location = scrollReader.current?.getLocation();
+      if (!location?.page) return;
+      const previous = readerStorage.getRecord(book.id);
+      onSave(book.id, {
+        contentVersion: book.contentVersion,
+        anchor: location.page.start,
+        updatedAt: new Date().toISOString(),
+        progress: location.isEnd ? 1 : location.progress,
+        bookmarks: previous?.bookmarks || [],
+      });
+    };
+    window.addEventListener("pagehide", saveVisiblePosition);
+    window.addEventListener("hashchange", saveVisiblePosition);
+    return () => {
+      window.removeEventListener("pagehide", saveVisiblePosition);
+      window.removeEventListener("hashchange", saveVisiblePosition);
+    };
+  }, [scrollMode, book, onSave]);
   const advance = useCallback(
     (next: boolean) => {
       if (loading || panel) return;
@@ -1723,10 +1827,29 @@ function ReadingView({
         cssReader.current?.advance(next);
         return;
       }
+      if (scrollMode) {
+        scrollReader.current?.advance(next);
+        return;
+      }
       const target = next ? nextAnchor : previousAnchor;
-      if (target) setAnchor(target);
+      if (target) {
+        if (settings.pageTurnAnimation)
+          setPageTurn((current) => ({
+            id: (current?.id ?? 0) + 1,
+            direction: next ? 1 : -1,
+          }));
+        setAnchor(target);
+      }
     },
-    [loading, panel, cssMode, nextAnchor, previousAnchor],
+    [
+      loading,
+      panel,
+      cssMode,
+      scrollMode,
+      nextAnchor,
+      previousAnchor,
+      settings.pageTurnAnimation,
+    ],
   );
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -1734,7 +1857,7 @@ function ReadingView({
         panel ||
         document.querySelector("dialog[open]") ||
         (event.target as HTMLElement).closest(
-          ".reader-settings,.reader-work-info,input,select,textarea,button,a,[contenteditable]",
+          ".reader-settings,.reader-work-info,.reader-anatomy-panel,input,select,textarea,button,a,[contenteditable]",
         )
       )
         return;
@@ -1756,6 +1879,7 @@ function ReadingView({
     const element = viewport.current!;
     const state = wheel.current;
     state.distance = 0;
+    if (scrollMode) return;
     const handler = (event: WheelEvent) => {
       if (
         event.defaultPrevented ||
@@ -1767,7 +1891,7 @@ function ReadingView({
         document.querySelector("dialog[open]") ||
         (event.target instanceof Element &&
           event.target.closest(
-            "input,select,textarea,button,a,[contenteditable]",
+            ".reader-anatomy-panel,input,select,textarea,button,a,[contenteditable]",
           ))
       ) {
         state.distance = 0;
@@ -1825,21 +1949,29 @@ function ReadingView({
     previousAnchor,
     settings.fontSize,
     settings.lineHeight,
+    scrollMode,
   ]);
   const addBookmark = () => {
     if (!page) return;
+    const bookmarkAnchor = scrollMode
+      ? (scrollReader.current?.getAnchor() ?? page.start)
+      : page.start;
     const current = readerStorage.getRecord(book.id) || {
       contentVersion: book.contentVersion,
-      anchor: page.start,
+      anchor: bookmarkAnchor,
       updatedAt: new Date().toISOString(),
-      progress: isEnd ? 1 : anchorProgress(book, page.start),
+      progress: isEnd
+        ? 1
+        : scrollMode
+          ? progress
+          : anchorProgress(book, page.start),
       bookmarks: [],
     };
     if (
       current.bookmarks.some(
         (b) =>
-          b.anchor.blockId === page.start.blockId &&
-          b.anchor.offset === page.start.offset,
+          b.anchor.blockId === bookmarkAnchor.blockId &&
+          b.anchor.offset === bookmarkAnchor.offset,
       )
     ) {
       onNotify("このページには、しおりが挟まれています");
@@ -1851,9 +1983,16 @@ function ReadingView({
         ...current.bookmarks,
         {
           id: crypto.randomUUID(),
-          anchor: page.start,
+          anchor: bookmarkAnchor,
           createdAt: new Date().toISOString(),
-          excerpt: page.text.replace(/\n/g, "").slice(0, 45),
+          excerpt: (scrollMode
+            ? (book.blocks
+                .find((block) => block.id === bookmarkAnchor.blockId)
+                ?.text.slice(bookmarkAnchor.offset) ?? page.text)
+            : page.text
+          )
+            .replace(/\n/g, "")
+            .slice(0, 45),
         },
       ],
     });
@@ -1908,6 +2047,7 @@ function ReadingView({
       className={`reader-shell ${vertical ? "vertical" : "horizontal"}`}
       data-testid="reader"
       data-engine={settings.renderingMode}
+      data-view={scrollMode ? "scroll" : "pages"}
     >
       <header className="reader-header">
         <a href="#/" className="reader-back" aria-label="本棚へ">
@@ -1937,19 +2077,23 @@ function ReadingView({
             className="direction-toggle page-layout-toggle"
             role="group"
             aria-label="ページ表示"
-            hidden={cssMode}
+            hidden={cssMode || scrollMode}
           >
             <button
               aria-label="1ページ表示に切り替え"
               aria-pressed={settings.pageLayout === "single"}
-              onClick={() => onSettings({ ...settings, pageLayout: "single" })}
+              onClick={() =>
+                changeSettings({ ...settings, pageLayout: "single" })
+              }
             >
               1ページ
             </button>
             <button
               aria-label="見開き表示に切り替え"
               aria-pressed={settings.pageLayout === "spread"}
-              onClick={() => onSettings({ ...settings, pageLayout: "spread" })}
+              onClick={() =>
+                changeSettings({ ...settings, pageLayout: "spread" })
+              }
             >
               見開き
             </button>
@@ -1958,19 +2102,19 @@ function ReadingView({
             <button
               aria-label="縦書きに切り替え"
               aria-pressed={vertical}
-              onClick={() => onSettings({ ...settings, direction: "tbRl" })}
+              onClick={() => changeSettings({ ...settings, direction: "tbRl" })}
             >
               縦
             </button>
             <button
               aria-label="横書きに切り替え"
               aria-pressed={!vertical}
-              onClick={() => onSettings({ ...settings, direction: "lrTb" })}
+              onClick={() => changeSettings({ ...settings, direction: "lrTb" })}
             >
               横
             </button>
           </div>
-          <ReaderThemeToggle settings={settings} onChange={onSettings} />
+          <ReaderThemeToggle settings={settings} onChange={changeSettings} />
           <div className="reader-bookmark-controls">
             <button
               className={`bookmark-add ${hasBookmark ? "marked" : ""}`}
@@ -2021,6 +2165,31 @@ function ReadingView({
           </button>
         </div>
       </header>
+      <div className="reader-view-bar" hidden={cssMode}>
+        <div className="reader-view-toggle" role="group" aria-label="読み方">
+          <button
+            aria-label="ページ表示"
+            aria-pressed={!scrollMode}
+            onClick={() => changeSettings({ ...settings, viewMode: "pages" })}
+          >
+            ページ
+          </button>
+          <button
+            aria-label="スクロール表示"
+            aria-pressed={scrollMode}
+            onClick={() => changeSettings({ ...settings, viewMode: "scroll" })}
+          >
+            スクロール
+          </button>
+        </div>
+        {scrollMode && (
+          <span>
+            {vertical
+              ? "右から左へ、つづけて読む"
+              : "下へスクロールして、つづけて読む"}
+          </span>
+        )}
+      </div>
       <div className="reader-workspace">
         <main id="main-content" tabIndex={-1} className="reader-main">
           <div
@@ -2032,7 +2201,7 @@ function ReadingView({
             <WorkDetails
               book={book}
               onRestart={() => {
-                setAnchor(createAnchor(book, book.blocks[0].id, 0));
+                jumpTo(createAnchor(book, book.blocks[0].id, 0));
                 setInfoOpen(false);
               }}
             />
@@ -2042,12 +2211,12 @@ function ReadingView({
             ref={viewport}
             data-testid="reader-viewport"
             onPointerDown={(event) => {
-              if (cssMode) return;
+              if (cssMode || scrollMode) return;
               if (event.pointerType === "touch")
                 pointer.current = { x: event.clientX, y: event.clientY };
             }}
             onPointerUp={(event) => {
-              if (cssMode) return;
+              if (cssMode || scrollMode) return;
               if (!pointer.current || window.getSelection()?.toString()) {
                 pointer.current = null;
                 return;
@@ -2082,6 +2251,29 @@ function ReadingView({
                   onLocationChange={onCssLocationChange}
                 />
               </div>
+            ) : scrollMode ? (
+              <div
+                className="reader-page-wrap reader-scroll-wrap"
+                data-testid="reader-page"
+                data-block={page?.start.blockId}
+                data-offset={page?.start.offset}
+                data-start={page?.globalStart}
+                data-end={page?.globalEnd}
+                data-layout="scroll"
+              >
+                <Suspense fallback={null}>
+                  <ScrollReader
+                    ref={scrollReader}
+                    book={book}
+                    settings={settings}
+                    width={size.width}
+                    height={size.height}
+                    anchor={anchor}
+                    onLocationChange={onScrollLocationChange}
+                    anatomyMode={anatomyMode}
+                  />
+                </Suspense>
+              </div>
             ) : (
               page && (
                 <div
@@ -2100,6 +2292,8 @@ function ReadingView({
                       pages={pages}
                       settings={settings}
                       spread={spread}
+                      pageTurn={pageTurn}
+                      anatomyMode={anatomyMode}
                     />
                   </Suspense>
                 </div>
@@ -2138,38 +2332,38 @@ function ReadingView({
                     底本・制作情報
                   </button>
                 </>
-              ) : !cssMode && settings.paginationMode === "on-demand" ? (
-                "言葉のつづきへ。"
               ) : null}
-              {!cssMode && settings.paginationMode !== "on-demand" && (
-                <span
-                  className="reader-preload-status"
-                  data-testid="pagination-preload"
-                  data-mode={settings.paginationMode}
-                  data-state={preload?.state ?? "running"}
-                  data-pages={preload?.preparedPages ?? 0}
-                  title={preload?.error ?? undefined}
-                >
-                  {preload?.state === "error" ? (
-                    <>
-                      先読みを停止しました{" "}
-                      <button className="text-link" onClick={retryLayout}>
-                        再試行
-                      </button>
-                    </>
-                  ) : settings.paginationMode === "all" ? (
-                    preload?.state === "complete" ? (
-                      `全${preload.preparedPages}ページ 組版済み`
+              {!cssMode &&
+                !scrollMode &&
+                settings.paginationMode !== "on-demand" && (
+                  <span
+                    className="reader-preload-status"
+                    data-testid="pagination-preload"
+                    data-mode={settings.paginationMode}
+                    data-state={preload?.state ?? "running"}
+                    data-pages={preload?.preparedPages ?? 0}
+                    title={preload?.error ?? undefined}
+                  >
+                    {preload?.state === "error" ? (
+                      <>
+                        先読みを停止しました{" "}
+                        <button className="text-link" onClick={retryLayout}>
+                          再試行
+                        </button>
+                      </>
+                    ) : settings.paginationMode === "all" ? (
+                      preload?.state === "complete" ? (
+                        `全${preload.preparedPages}ページ 組版済み`
+                      ) : (
+                        `全ページ組版中 · ${Math.floor((preload?.progress ?? 0) * 100)}%`
+                      )
+                    ) : preload?.state === "complete" ? (
+                      `${preload.preparedPages}ページ先読み済み`
                     ) : (
-                      `全ページ組版中 · ${Math.floor((preload?.progress ?? 0) * 100)}%`
-                    )
-                  ) : preload?.state === "complete" ? (
-                    `${preload.preparedPages}ページ先読み済み`
-                  ) : (
-                    `先読み中 · ${preload?.preparedPages ?? 0}/10ページ`
-                  )}
-                </span>
-              )}
+                      `先読み中 · ${preload?.preparedPages ?? 0}/10ページ`
+                    )}
+                  </span>
+                )}
             </span>
             <span aria-live="polite">
               {Math.round((isEnd ? 1 : progress) * 100)}% 読了
@@ -2195,7 +2389,19 @@ function ReadingView({
             tabIndex={0}
             aria-label="読書設定の項目"
           >
-            <SettingsPanel settings={settings} onChange={onSettings} />
+            {!cssMode && (
+              <button
+                className="anatomy-setting-toggle"
+                aria-label="組版の解剖モード"
+                aria-pressed={anatomyMode}
+                onClick={() => setAnatomyMode((enabled) => !enabled)}
+              >
+                <ScanText size={19} aria-hidden="true" />
+                <span>組版の解剖モード</span>
+                <span>{anatomyMode ? "オン" : "オフ"}</span>
+              </button>
+            )}
+            <SettingsPanel settings={settings} onChange={changeSettings} />
           </div>
         </aside>
       </div>
@@ -2220,13 +2426,25 @@ function ReadingView({
             </button>
             <ReaderQuickControls
               settings={settings}
-              onChange={onSettings}
+              onChange={changeSettings}
               onOpen={() => {
                 setPanel(null);
                 setSettingsOpen(false);
                 setInfoOpen(false);
               }}
             />
+            {!cssMode && (
+              <button
+                className="toolbar-anatomy"
+                aria-label="組版の解剖モード"
+                aria-pressed={anatomyMode}
+                onClick={() => setAnatomyMode((enabled) => !enabled)}
+                title="組版の解剖モード"
+              >
+                <ScanText size={19} aria-hidden="true" />
+                <span>解剖</span>
+              </button>
+            )}
           </div>
           <div className="page-controls">
             {vertical ? next : previous}
@@ -2250,7 +2468,7 @@ function ReadingView({
           <div className="toc-list">
             <button
               onClick={() => {
-                setAnchor(createAnchor(book, book.blocks[0].id, 0));
+                jumpTo(createAnchor(book, book.blocks[0].id, 0));
                 setPanel(null);
               }}
             >
@@ -2262,7 +2480,7 @@ function ReadingView({
                 key={`${item.blockId}-${i}`}
                 className={item.level > 1 ? "subheading" : ""}
                 onClick={() => {
-                  setAnchor(createAnchor(book, item.blockId, 0));
+                  jumpTo(createAnchor(book, item.blockId, 0));
                   setPanel(null);
                 }}
               >
@@ -2289,7 +2507,7 @@ function ReadingView({
                       b.anchor,
                       record!.contentVersion,
                     );
-                    setAnchor(restored.anchor);
+                    jumpTo(restored.anchor);
                     setPanel(null);
                     if (restored.adjusted)
                       onNotify(

@@ -130,7 +130,9 @@ export const latinFontOptions = [
 export interface ReaderSettings {
   renderingMode: "stone" | "css";
   direction: "tbRl" | "lrTb";
+  viewMode: "pages" | "scroll";
   pageLayout: "single" | "spread";
+  pageTurnAnimation: boolean;
   paginationMode: "on-demand" | "batch" | "all";
   fontSize: number;
   lineHeight: number;
@@ -166,7 +168,9 @@ export interface ReadingRecord {
 export const defaultSettings: ReaderSettings = {
   renderingMode: "stone",
   direction: "tbRl",
+  viewMode: "pages",
   pageLayout: "single",
+  pageTurnAnimation: false,
   paginationMode: "on-demand",
   fontSize: 20,
   lineHeight: 1.9,

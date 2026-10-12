@@ -68,11 +68,75 @@ describe('reader state persistence', () => {
     expect(state.getStatus().corrupted).toBe(false);
   });
 
+  it("keeps page-turn animation off for new and older readers without resetting preferences", () => {
+    const disk = new MemoryStorage();
+    expect(createReaderStorage(disk).getSettings().pageTurnAnimation).toBe(
+      false,
+    );
+    const { pageTurnAnimation: _pageTurnAnimation, ...earlierSettings } =
+      defaultSettings;
+    disk.setItem(
+      `${STORAGE_PREFIX}settings`,
+      JSON.stringify({
+        ...earlierSettings,
+        settingsVersion: 2,
+        direction: "lrTb",
+        fontSize: 28,
+        theme: "dark",
+      }),
+    );
+    const reopened = createReaderStorage(disk);
+    expect(reopened.getSettings()).toEqual({
+      ...defaultSettings,
+      direction: "lrTb",
+      fontSize: 28,
+      theme: "dark",
+    });
+    expect(reopened.getStatus().corrupted).toBe(false);
+  });
+
+  it("keeps page display for older settings and persists the scroll preference", () => {
+    const disk = new MemoryStorage();
+    const { viewMode: _viewMode, ...earlierSettings } = defaultSettings;
+    disk.setItem(
+      `${STORAGE_PREFIX}settings`,
+      JSON.stringify({
+        ...earlierSettings,
+        settingsVersion: 2,
+        direction: "lrTb",
+        fontSize: 28,
+      }),
+    );
+    const state = createReaderStorage(disk);
+    expect(state.getSettings()).toEqual({
+      ...defaultSettings,
+      direction: "lrTb",
+      fontSize: 28,
+    });
+    expect(state.getStatus().corrupted).toBe(false);
+    state.saveSettings({ ...state.getSettings(), viewMode: "scroll" });
+    expect(createReaderStorage(disk).getSettings().viewMode).toBe("scroll");
+    disk.setItem(
+      `${STORAGE_PREFIX}settings`,
+      JSON.stringify({
+        ...defaultSettings,
+        settingsVersion: 2,
+        viewMode: "invalid",
+        theme: "dark",
+      }),
+    );
+    expect(createReaderStorage(disk).getSettings()).toEqual({
+      ...defaultSettings,
+      theme: "dark",
+    });
+  });
+
   it('persists all typography controls, including modern 1.6 spacing without legacy migration', () => {
     const disk = new MemoryStorage();
     const settings = { ...defaultSettings, fontSize: 47, lineHeight: 1.6, font: 'noto-sans' as const,
       latinFont: 'georgia' as const, latinScale: 0.83, punctuationMode: 'whole' as const,
       pageLayout: 'spread' as const,
+      pageTurnAnimation: true,
       paginationMode: 'all' as const,
       textAlign: 'justify' as const, directionAlign: 'end' as const,
       kinsoku: false, dividesByWords: false, allowsTateChuYoko: false, showFrames: false };

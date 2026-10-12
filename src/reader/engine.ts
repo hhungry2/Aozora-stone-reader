@@ -131,7 +131,16 @@ export function indexBook(book: Book): BookIndex {
 export function anchorAt(index: BookIndex, position: number): Anchor {
   const p = Math.max(0, Math.min(index.text.length, position));
   // A separator belongs to the preceding block: offset text.length is a valid anchor.
-  const range = index.ranges.find((r) => p <= r.end) ?? index.ranges.at(-1);
+  // This is also used while continuously scrolling. Locate the first matching
+  // end without walking every preceding paragraph of a long work.
+  let low = 0;
+  let high = index.ranges.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (index.ranges[middle].end < p) low = middle + 1;
+    else high = middle;
+  }
+  const range = index.ranges[low] ?? index.ranges.at(-1);
   return {
     blockId: range?.block.id ?? '',
     offset: range ? Math.min(p - range.start, range.end - range.start) : 0,
@@ -238,7 +247,7 @@ function layoutBlocks(context: StoneContext, index: BookIndex, start: number, en
   let lineBase = 0;
   for (const range of index.ranges) {
     const segmentStart = Math.max(start, range.start);
-    const segmentEnd = Math.min(end, range.end + (range === index.ranges.at(-1) ? 0 : 1));
+    const segmentEnd = Math.min(end, index.text.length, range.end + 1);
     if (segmentEnd <= segmentStart) continue;
     const localStart = segmentStart - start;
     const lo = offsets.findIndex((offset) => offset >= localStart);
@@ -290,8 +299,9 @@ export class PaginationEngine {
     readonly width: number,
     readonly height: number,
     readonly measurer: FontMeasurer = new FixedMeasurer(),
+    index?: BookIndex,
   ) {
-    this.index = indexBook(book);
+    this.index = index ?? indexBook(book);
     const line = settings.fontSize * settings.lineHeight;
     this.windowSize = Math.max(512, Math.min(12000, Math.ceil(width * height / (settings.fontSize * line) * 3) + 256));
   }
@@ -328,10 +338,15 @@ export class PaginationEngine {
     return this.layoutPage(requested, stopAt, true);
   }
 
-  private layoutPage(requested: number, stopAt: number | undefined, rememberPredecessor: boolean): ReaderPageData {
+  /** Lay out a bounded source chunk along the unlimited progression axis. */
+  layoutContinuousRange(start: number, end: number): ReaderPageData {
+    return this.layoutPage(start, end, false, true);
+  }
+
+  private layoutPage(requested: number, stopAt: number | undefined, rememberPredecessor: boolean, continuous = false): ReaderPageData {
     const start = safeStart(this.index, requested);
     const cached = this.cache.get(start);
-    if (cached && (stopAt === undefined || cached.globalEnd <= stopAt)) {
+    if (!continuous && cached && (stopAt === undefined || cached.globalEnd <= stopAt)) {
       this.cache.delete(start); this.cache.set(start, cached);
       if (rememberPredecessor && cached.globalEnd > start) this.predecessors.set(cached.globalEnd, start);
       return cached;
@@ -354,7 +369,8 @@ export class PaginationEngine {
     const imageLimit = imageRange
       ? imagePage ? Math.min(this.index.text.length, imageRange.end + 1) : imageRange.start
       : this.index.text.length;
-    const end = Math.min(stopAt ?? this.index.text.length, imageLimit, safeWindowEnd(this.index, start, this.windowSize));
+    const end = Math.min(stopAt ?? this.index.text.length, imageLimit,
+      continuous ? this.index.text.length : safeWindowEnd(this.index, start, this.windowSize));
     const text = this.index.text.slice(start, end);
     const context = new StoneContext({
       direction: this.settings.direction, fontSize,
@@ -379,7 +395,7 @@ export class PaginationEngine {
     // image is drawn at 1em, so reserve that same space before layout and wrapping.
     for (const run of context.runs) if (run.char === '\ufffc') run.advance = fontSize;
     layoutBlocks(context, this.index, start, end, offsets, rubies, bodyWidth, bodyHeight);
-    let cutoff = context.runs.findIndex((run) => vertical ? run.frame.x < -0.01 : run.frame.y + run.frame.height > bodyHeight + 0.01);
+    let cutoff = continuous ? context.runs.length : context.runs.findIndex((run) => vertical ? run.frame.x < -0.01 : run.frame.y + run.frame.height > bodyHeight + 0.01);
     if (cutoff < 0) cutoff = context.runs.length;
     while (cutoff > 0 && cutoff < context.runs.length && context.runs[cutoff - 1].line === context.runs[cutoff].line) cutoff -= 1;
     let consumed = offsets[cutoff] ?? text.length;
@@ -391,27 +407,37 @@ export class PaginationEngine {
     context.runs.forEach((run) => { run.visibility = 'visible'; });
     // Align only the retained page, after cutting the unlimited layout window.
     // Aligning that whole window would shift later text onto the current page.
-    if (context.runs.length && this.settings.directionAlign !== 'start') {
+    if (!continuous && context.runs.length && this.settings.directionAlign !== 'start') {
       const fraction = this.settings.directionAlign === 'middle' ? 0.5 : 1;
       const low = Math.min(...context.runs.map((run) => vertical ? run.frame.x : run.frame.y));
       const high = Math.max(...context.runs.map((run) => vertical ? run.frame.x + run.frame.width : run.frame.y + run.frame.height));
       const spare = Math.max(0, (vertical ? bodyWidth : bodyHeight) - (high - low));
       for (const run of context.runs) translateRun(run, vertical ? -spare * fraction : 0, vertical ? 0 : spare * fraction);
     }
+    const progressionExtent = Math.max(context.lineHeight, context.lineCount * context.lineHeight);
+    const bodyExtent = continuous && imagePage ? (vertical ? bodyWidth : bodyHeight) : progressionExtent;
+    // Each continuous line occupies exactly one pitch. Put its annotation lane
+    // inside that pitch rather than adding a fresh outer margin to every chunk.
+    const continuousAnnotationInset = imagePage ? 0 : Math.min(fontSize * 0.6, Math.max(0, context.lineHeight - fontSize));
+    if (continuous && vertical) {
+      for (const run of context.runs) translateRun(run, bodyExtent - bodyWidth - continuousAnnotationInset, 0);
+    }
     const pageEnd = start + consumed;
     const page: ReaderPageData = {
       start: anchorAt(this.index, start), end: anchorAt(this.index, pageEnd),
       globalStart: start, globalEnd: pageEnd, text: this.index.text.slice(start, pageEnd),
-      width: this.width, height: this.height, insetX: vertical ? margin : leadingMargin,
-      insetY: vertical ? leadingMargin : margin + annotationLane + openingSpace, context,
+      width: continuous && vertical ? bodyExtent + openingSpace : this.width,
+      height: continuous && !vertical ? bodyExtent + openingSpace : this.height,
+      insetX: vertical ? (continuous ? 0 : margin) : leadingMargin,
+      insetY: vertical ? leadingMargin : (continuous ? continuousAnnotationInset : margin + annotationLane) + openingSpace, context,
       glyphs: glyphParagraphs(context).flatMap((paragraph) => paragraph.groups.flatMap((group) => group.glyphs))
         .filter((glyph) => glyph.text !== '\ufffc'),
       rubies: [], emphasis: [], images: [],
       ranges: this.index.ranges.filter((r) => r.end >= start && r.start < pageEnd),
       opening: opening ? {
         ...opening.opening,
-        x: vertical ? margin + bodyWidth + opening.gap : leadingMargin,
-        y: vertical ? leadingMargin : margin + annotationLane,
+        x: vertical ? (continuous ? bodyExtent : margin + bodyWidth) + opening.gap : leadingMargin,
+        y: vertical ? leadingMargin : continuous ? 0 : margin + annotationLane,
       } : undefined,
     };
     this.decorate(page, offsets, rubies);
@@ -420,7 +446,7 @@ export class PaginationEngine {
       page.images = [{ ...imageRange.block.image, x: 0, y: 0, width: bodyWidth, height: bodyHeight }];
     }
     if (rememberPredecessor && pageEnd > start) this.predecessors.set(pageEnd, start);
-    this.cache.set(start, page);
+    if (!continuous) this.cache.set(start, page);
     const limit = this.settings.paginationMode === 'all' ? Infinity : this.settings.paginationMode === 'batch' ? 14 : 3;
     while (this.cache.size > limit) this.cache.delete(this.cache.keys().next().value!);
     return page;
