@@ -49,6 +49,20 @@ describe("speech source", () => {
     ]);
     expect(chunks[0].start).toMatchObject({ blockId: "a", offset: 0 });
     expect(chunks[0].excerpt).toBe("御釈迦様は歩いた。");
+    expect(chunks[0].range).toEqual({
+      blockId: "a",
+      start: 0,
+      end: 9,
+      globalStart: 0,
+      globalEnd: 9,
+    });
+    expect(chunks[1].range).toEqual({
+      blockId: "a",
+      start: 9,
+      end: 13,
+      globalStart: 9,
+      globalEnd: 13,
+    });
   });
 
   it("starts at the source anchor and continues over headings, empty blocks and notes", () => {
@@ -87,6 +101,21 @@ describe("speech source", () => {
       "終わり。",
     ]);
     expect(chunks.at(-1)?.position).toBe(11);
+    expect(chunks[0].range).toMatchObject({ blockId: "a", start: 0, end: 6 });
+    expect(chunks[1].range).toEqual({
+      blockId: "img",
+      start: 0,
+      end: 1,
+      globalStart: 7,
+      globalEnd: 8,
+    });
+    expect(chunks.at(-1)?.range).toEqual({
+      blockId: "last",
+      start: 0,
+      end: 4,
+      globalStart: 11,
+      globalEnd: 15,
+    });
   });
 
   it("splits long passages without losing text, splitting surrogate pairs or cutting ruby", () => {

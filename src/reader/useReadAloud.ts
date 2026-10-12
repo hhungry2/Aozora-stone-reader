@@ -4,6 +4,7 @@ import {
   createSpeechSource,
   nextSpeechChunk,
   type SpeechChunk,
+  type SpeechRange,
 } from "./speech";
 
 type SpeechStatus = "idle" | "speaking" | "paused" | "finished" | "error";
@@ -11,6 +12,7 @@ interface SpeechState {
   status: SpeechStatus;
   excerpt: string;
   error: string | null;
+  range: SpeechRange | null;
 }
 interface SpeechSession {
   cursor: Anchor;
@@ -18,7 +20,12 @@ interface SpeechSession {
   utterance: SpeechSynthesisUtterance | null;
   paused: boolean;
 }
-const idle: SpeechState = { status: "idle", excerpt: "", error: null };
+const idle: SpeechState = {
+  status: "idle",
+  excerpt: "",
+  error: null,
+  range: null,
+};
 
 export function useReadAloud({
   book,
@@ -81,7 +88,7 @@ export function useReadAloud({
       const chunk = nextSpeechChunk(source, current.cursor);
       if (!chunk) {
         session.current = null;
-        setState({ status: "finished", excerpt: "", error: null });
+        setState({ status: "finished", excerpt: "", error: null, range: null });
         return;
       }
       const synth = window.speechSynthesis;
@@ -103,8 +110,14 @@ export function useReadAloud({
       const isCurrent = () =>
         session.current === current && current.utterance === utterance;
       utterance.onstart = () => {
-        if (isCurrent())
-          preferences.current.onPosition(chunk.start, chunk.position);
+        if (!isCurrent()) return;
+        setState({
+          status: "speaking",
+          excerpt: chunk.excerpt,
+          error: null,
+          range: chunk.range,
+        });
+        preferences.current.onPosition(chunk.start, chunk.position);
       };
       utterance.onend = () => {
         if (!isCurrent()) return;
@@ -115,7 +128,12 @@ export function useReadAloud({
       const fail = (message: string) => {
         if (!isCurrent()) return;
         cancelSession();
-        setState({ status: "error", excerpt: chunk.excerpt, error: message });
+        setState({
+          status: "error",
+          excerpt: chunk.excerpt,
+          error: message,
+          range: null,
+        });
       };
       utterance.onerror = (event) =>
         fail(
@@ -126,7 +144,12 @@ export function useReadAloud({
               ? "選択した音声を利用できません。音声を変更して再試行してください。"
               : "読み上げに失敗しました。端末の音声設定を確認して再試行してください。",
         );
-      setState({ status: "speaking", excerpt: chunk.excerpt, error: null });
+      setState({
+        status: "speaking",
+        excerpt: chunk.excerpt,
+        error: null,
+        range: null,
+      });
       try {
         synth.speak(utterance);
       } catch {

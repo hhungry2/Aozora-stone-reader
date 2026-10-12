@@ -1,5 +1,6 @@
 import {
   forwardRef,
+  memo,
   useEffect,
   useImperativeHandle,
   useLayoutEffect,
@@ -21,6 +22,7 @@ import { displayTitle } from "../lib/titles";
 import { createAnchor } from "../lib/anchors";
 import { readerImageUrl } from "../lib/assets";
 import { loadReaderFont } from "./fonts";
+import type { SpeechRange } from "./speech";
 import "./css-reader.css";
 
 export interface CssReaderPage {
@@ -53,6 +55,7 @@ interface CssReaderProps {
   height: number;
   anchor: Anchor;
   onLocationChange: (location: CssReaderLocation) => void;
+  speechRange?: SpeechRange | null;
 }
 
 interface SourceBlock {
@@ -152,14 +155,29 @@ function sourceAnchor(
 }
 
 /** Group text at annotation/run boundaries, rather than creating a DOM node per character. */
-function blockContent(block: TextBlock, settings: ReaderSettings): ReactNode[] {
+function blockContent(
+  block: TextBlock,
+  settings: ReaderSettings,
+  speechRange?: SpeechRange | null,
+): ReactNode[] {
   const text = block.text;
   const images = [...block.inlineImages].sort((a, b) => a.start - b.start);
   const rubies = settings.ruby
     ? [...block.rubies].sort((a, b) => a.start - b.start)
     : [];
-  const plain = (start: number, end: number): ReactNode[] => {
+  const plain = (
+    start: number,
+    end: number,
+    speakingRuby = false,
+  ): ReactNode[] => {
     const boundaries = new Set([start, end]);
+    // Keep source runs intact outside the current sentence, including long paragraphs.
+    if (speechRange) {
+      if (speechRange.start > start && speechRange.start < end)
+        boundaries.add(speechRange.start);
+      if (speechRange.end > start && speechRange.end < end)
+        boundaries.add(speechRange.end);
+    }
     for (const emphasis of block.emphasis) {
       if (emphasis.start > start && emphasis.start < end)
         boundaries.add(emphasis.start);
@@ -186,6 +204,11 @@ function blockContent(block: TextBlock, settings: ReaderSettings): ReactNode[] {
     for (let index = 0; index + 1 < cuts.length; index += 1) {
       const from = cuts[index];
       const to = cuts[index + 1];
+      const speaking =
+        !speakingRuby &&
+        !!speechRange &&
+        from >= speechRange.start &&
+        to <= speechRange.end;
       const image = images.find(
         (entry) =>
           entry.start <= from &&
@@ -198,7 +221,7 @@ function blockContent(block: TextBlock, settings: ReaderSettings): ReactNode[] {
           pieces.push(
             <span
               key={`image-${from}`}
-              className="css-reader-inline-image"
+              className={`css-reader-inline-image${speaking ? " reader-speech-active" : ""}`}
               data-css-run
               data-css-start={from}
               data-css-end={image.end}
@@ -223,6 +246,7 @@ function blockContent(block: TextBlock, settings: ReaderSettings): ReactNode[] {
         emphasis && "css-reader-emphasis",
         latin && "css-reader-latin",
         tcy && "css-reader-tcy",
+        speaking && "reader-speech-active",
       ]
         .filter(Boolean)
         .join(" ");
@@ -246,9 +270,16 @@ function blockContent(block: TextBlock, settings: ReaderSettings): ReactNode[] {
     if (ruby.start < offset || ruby.end > text.length || ruby.end <= ruby.start)
       continue;
     result.push(...plain(offset, ruby.start));
+    const speaking =
+      !!speechRange &&
+      ruby.start >= speechRange.start &&
+      ruby.end <= speechRange.end;
     result.push(
-      <ruby key={`ruby-${ruby.start}`}>
-        {plain(ruby.start, ruby.end)}
+      <ruby
+        key={`ruby-${ruby.start}`}
+        className={speaking ? "reader-speech-active" : undefined}
+      >
+        {plain(ruby.start, ruby.end, speaking)}
         <rt>{ruby.reading}</rt>
       </ruby>,
     );
@@ -280,12 +311,14 @@ function openingContent(text: string, settings: ReaderSettings): ReactNode[] {
     });
 }
 
-function NativeBlock({
+const NativeBlock = memo(function NativeBlock({
   block,
   settings,
+  speechRange,
 }: {
   block: TextBlock;
   settings: ReaderSettings;
+  speechRange?: SpeechRange | null;
 }) {
   const attributes = {
     "data-css-block": block.id,
@@ -308,11 +341,13 @@ function NativeBlock({
             {image}
           </span>
         )}
-        {block.text && <figcaption>{blockContent(block, settings)}</figcaption>}
+        {block.text && (
+          <figcaption>{blockContent(block, settings, speechRange)}</figcaption>
+        )}
       </figure>
     );
   }
-  const content = blockContent(block, settings);
+  const content = blockContent(block, settings, speechRange);
   if (block.kind === "heading") {
     const Heading = `h${Math.max(1, Math.min(6, block.level ?? 2))}` as
       "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
@@ -330,7 +365,7 @@ function NativeBlock({
       {content.length ? content : <br />}
     </p>
   );
-}
+});
 
 function textPosition(block: MeasuredBlock, requested: number): DOMRect {
   const edge = graphemeRange(
@@ -361,7 +396,7 @@ function textPosition(block: MeasuredBlock, requested: number): DOMRect {
 /** Native HTML flow and Range geometry are the only layout/positioning mechanisms here. */
 export const CssReader = forwardRef<CssReaderHandle, CssReaderProps>(
   function CssReader(
-    { book, settings, width, height, anchor, onLocationChange },
+    { book, settings, width, height, anchor, onLocationChange, speechRange },
     ref,
   ) {
     const root = useRef<HTMLDivElement>(null);
@@ -387,9 +422,14 @@ export const CssReader = forwardRef<CssReaderHandle, CssReaderProps>(
     const content = useMemo(
       () =>
         book.blocks.map((block) => (
-          <NativeBlock key={block.id} block={block} settings={settings} />
+          <NativeBlock
+            key={block.id}
+            block={block}
+            settings={settings}
+            speechRange={speechRange?.blockId === block.id ? speechRange : null}
+          />
         )),
-      [book, settings.ruby, settings.allowsTateChuYoko],
+      [book, settings.ruby, settings.allowsTateChuYoko, speechRange],
     );
     const emit = (location: CssReaderLocation) => {
       const signature = JSON.stringify([
@@ -674,6 +714,7 @@ export const CssReader = forwardRef<CssReaderHandle, CssReaderProps>(
       settings.ruby,
       settings.allowsTateChuYoko,
       fontRevision,
+      speechRange,
     ]);
 
     useLayoutEffect(() => {

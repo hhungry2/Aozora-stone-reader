@@ -15,6 +15,7 @@ import type { ReaderPageData } from "./engine";
 import type { ScrollLayoutEngine } from "./scrollLayout";
 import { ReaderPages } from "./ReaderPage";
 import { loadReaderFont } from "./fonts";
+import type { SpeechRange } from "./speech";
 import {
   ScrollExtentIndex,
   sourceFrame,
@@ -52,6 +53,7 @@ interface ScrollReaderProps {
   anchor: Anchor | null;
   onLocationChange: (location: ScrollReaderLocation) => void;
   anatomyMode?: boolean;
+  speechRange?: SpeechRange | null;
 }
 
 interface Runtime {
@@ -101,11 +103,13 @@ const ScrollChunkBody = memo(function ScrollChunkBody({
   settings,
   anatomyMode,
   anatomyViewport,
+  speechRange,
 }: {
   page: ReaderPageData;
   settings: ReaderSettings;
   anatomyMode: boolean;
   anatomyViewport: HTMLElement | null;
+  speechRange?: SpeechRange | null;
 }) {
   const pages = useMemo(() => [page], [page]);
   return (
@@ -115,6 +119,7 @@ const ScrollChunkBody = memo(function ScrollChunkBody({
       spread={false}
       anatomyMode={anatomyMode}
       anatomyViewport={anatomyViewport}
+      speechRange={speechRange}
     />
   );
 });
@@ -144,6 +149,7 @@ export const ScrollReader = forwardRef<ScrollReaderHandle, ScrollReaderProps>(
       anchor,
       onLocationChange,
       anatomyMode = false,
+      speechRange,
     },
     forwardedRef,
   ) {
@@ -904,6 +910,13 @@ export const ScrollReader = forwardRef<ScrollReaderHandle, ScrollReaderProps>(
                   settings={scrollSettings}
                   anatomyMode={anatomyMode && inspectionChunk === index}
                   anatomyViewport={host.current}
+                  speechRange={
+                    speechRange &&
+                    speechRange.globalStart < page.globalEnd &&
+                    speechRange.globalEnd > page.globalStart
+                      ? speechRange
+                      : null
+                  }
                 />
               </div>
             ))}

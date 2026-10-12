@@ -2364,6 +2364,7 @@ function ReadingView({
                   height={size.height}
                   anchor={anchor}
                   onLocationChange={onCssLocationChange}
+                  speechRange={speech.range}
                 />
               </div>
             ) : scrollMode ? (
@@ -2386,6 +2387,7 @@ function ReadingView({
                     anchor={anchor}
                     onLocationChange={onScrollLocationChange}
                     anatomyMode={anatomyMode}
+                    speechRange={speech.range}
                   />
                 </Suspense>
               </div>
@@ -2409,6 +2411,7 @@ function ReadingView({
                       spread={spread}
                       pageTurn={pageTurn}
                       anatomyMode={anatomyMode}
+                      speechRange={speech.range}
                     />
                   </Suspense>
                 </div>

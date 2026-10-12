@@ -33,6 +33,16 @@ export interface SpeechChunk {
   start: Anchor;
   next: Anchor;
   position: number;
+  range: SpeechRange;
+}
+
+/** Original source offsets, before ruby and image alternatives replace the text. */
+export interface SpeechRange {
+  blockId: string;
+  start: number;
+  end: number;
+  globalStart: number;
+  globalEnd: number;
 }
 
 /** Keep the speech source independent of the rendering engine and its page cache. */
@@ -95,6 +105,13 @@ export function nextSpeechChunk(
             ? anchor(source.blocks[index + 1], 0)
             : anchor(block, Math.max(1, block.text.length)),
           position: source.starts[index],
+          range: {
+            blockId: block.id,
+            start: 0,
+            end: Math.max(1, block.text.length),
+            globalStart: source.starts[index],
+            globalEnd: source.starts[index] + Math.max(1, block.text.length),
+          },
         };
       }
       index++;
@@ -148,6 +165,13 @@ export function nextSpeechChunk(
         start: anchor(block, start),
         next,
         position: source.starts[index] + start,
+        range: {
+          blockId: block.id,
+          start,
+          end,
+          globalStart: source.starts[index] + start,
+          globalEnd: source.starts[index] + end,
+        },
       };
     }
     if (end < block.text.length) {

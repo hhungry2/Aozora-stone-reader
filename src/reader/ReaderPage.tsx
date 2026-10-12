@@ -26,43 +26,65 @@ import {
 } from "./useDirectionTransition";
 import { createAnatomy, type AnatomyGlyph, type PageAnatomy } from "./anatomy";
 import { AnatomyOverlay, AnatomyPanel } from "./ReaderAnatomy";
+import type { SpeechRange } from "./speech";
 
 function Glyphs({
   glyphs,
   prefix = "",
   sources,
+  speechRange,
+  speaking = false,
 }: {
   glyphs: GlyphElement[];
   prefix?: string;
   sources: Map<number, string>;
+  speechRange?: SpeechRange | null;
+  speaking?: boolean;
 }) {
   return (
     <text xmlSpace="preserve" fill="currentColor">
-      {glyphs.map((glyph) => (
-        <tspan
-          key={`${prefix}${glyph.runId}`}
-          data-run={prefix ? undefined : glyph.runId}
-          data-source={sources.get(glyph.runId)}
-          x={glyph.x}
-          y={glyph.y}
-          rotate={glyph.rotate || undefined}
-          fontFamily={glyph.fontFamily}
-          fontSize={glyph.fontSize}
-          fontWeight={glyph.fontWeight}
-          fontStyle={glyph.fontStyle}
-          style={{
-            fontFeatureSettings: glyph.vertical
-              ? glyph.fullWidth
-                ? '"fwid" 1, "vert" 1, "vrt2" 1'
-                : '"vert" 1, "vrt2" 1'
-              : glyph.fullWidth
-                ? '"fwid" 1'
-                : undefined,
-          }}
-        >
-          {glyph.text}
-        </tspan>
-      ))}
+      {glyphs.map((glyph) => {
+        const source = sources.get(glyph.runId);
+        const position = source?.startsWith("body:")
+          ? Number(source.slice(5))
+          : -1;
+        const active =
+          speaking ||
+          (!!speechRange &&
+            position >= speechRange.globalStart &&
+            position < speechRange.globalEnd);
+        // Enlarge around the occupied cell's center, rather than its baseline.
+        // A modest scale keeps adjacent body glyphs and ruby legible at a fixed pitch.
+        const scale = active ? 1.1 : 1;
+        const centerX = glyph.run.frame.x + glyph.run.frame.width / 2;
+        const centerY = glyph.run.frame.y + glyph.run.frame.height / 2;
+        return (
+          <tspan
+            key={`${prefix}${glyph.runId}`}
+            data-run={prefix ? undefined : glyph.runId}
+            data-source={source}
+            className={active ? "reader-speech-active" : undefined}
+            x={centerX + (glyph.x - centerX) * scale}
+            y={centerY + (glyph.y - centerY) * scale}
+            rotate={glyph.rotate || undefined}
+            fontFamily={glyph.fontFamily}
+            fontSize={glyph.fontSize * scale}
+            fontWeight={glyph.fontWeight}
+            fontStyle={glyph.fontStyle}
+            style={{
+              fontFeatureSettings: glyph.vertical
+                ? glyph.fullWidth
+                  ? '"fwid" 1, "vert" 1, "vrt2" 1'
+                  : '"vert" 1, "vrt2" 1'
+                : glyph.fullWidth
+                  ? '"fwid" 1'
+                  : undefined,
+            }}
+          >
+            {glyph.text}
+          </tspan>
+        );
+      })}
     </text>
   );
 }
@@ -171,12 +193,14 @@ export const ReaderPage = memo(function ReaderPage({
   className,
   anatomy,
   selected,
+  speechRange,
 }: {
   page: ReaderPageData;
   settings: ReaderSettings;
   className?: string;
   anatomy?: PageAnatomy;
   selected?: AnatomyGlyph;
+  speechRange?: SpeechRange | null;
 }) {
   const svg = useRef<SVGSVGElement>(null);
   const root = useRef<HTMLDivElement>(null);
@@ -318,7 +342,11 @@ export const ReaderPage = memo(function ReaderPage({
                 ))}
             </g>
           )}
-          <Glyphs glyphs={page.glyphs} sources={bodySources} />
+          <Glyphs
+            glyphs={page.glyphs}
+            sources={bodySources}
+            speechRange={speechRange}
+          />
           <g className="reader-rubies" style={{ userSelect: "none" }}>
             {page.rubies.map((ruby) => (
               <g
@@ -328,6 +356,11 @@ export const ReaderPage = memo(function ReaderPage({
                 <Glyphs
                   glyphs={ruby.glyphs}
                   prefix={`${ruby.key}-`}
+                  speaking={
+                    !!speechRange &&
+                    ruby.sourceStart >= speechRange.globalStart &&
+                    ruby.sourceStart < speechRange.globalEnd
+                  }
                   sources={glyphSources(
                     ruby.glyphs,
                     `ruby:${ruby.sourceStart}:`,
@@ -385,6 +418,7 @@ export const ReaderPages = memo(function ReaderPages({
   pageTurn,
   anatomyMode = false,
   anatomyViewport,
+  speechRange,
 }: {
   pages: ReaderPageData[];
   settings: ReaderSettings;
@@ -393,6 +427,7 @@ export const ReaderPages = memo(function ReaderPages({
   anatomyMode?: boolean;
   /** A continuous reader keeps its inspector outside the scrolling SVG chunks. */
   anatomyViewport?: HTMLElement | null;
+  speechRange?: SpeechRange | null;
 }) {
   const root = useRef<HTMLDivElement>(null);
   useDirectionTransition(root, pages, settings.showFrames, pageTurn, {
@@ -603,6 +638,7 @@ export const ReaderPages = memo(function ReaderPages({
           className="reader-leaf"
           anatomy={anatomy[index]}
           selected={selected?.page === page ? selected.glyph : undefined}
+          speechRange={speechRange}
         />
       ))}
       {spread && pages.length === 1 && (

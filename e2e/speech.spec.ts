@@ -183,6 +183,31 @@ const speechCalls = (page: Page) =>
 const finish = (page: Page) =>
   page.evaluate(() => (window as any).speechTest.finish());
 
+async function highlightedText(page: Page) {
+  return page
+    .locator(
+      'svg tspan.reader-speech-active[data-source^="body:"], .css-reader-document .reader-speech-active [data-css-run], .css-reader-document [data-css-run].reader-speech-active',
+    )
+    .allTextContents()
+    .then((parts) => parts.join(""));
+}
+
+async function expectHighlighted(page: Page, text: string, dark = false) {
+  await expect.poll(() => highlightedText(page)).toBe(text);
+  const styles = await page
+    .locator(".reader-page-wrap .reader-speech-active")
+    .first()
+    .evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        color: element.namespaceURI?.includes("svg") ? style.fill : style.color,
+        size: parseFloat(style.fontSize),
+      };
+    });
+  expect(styles.color).toBe(dark ? "rgb(255, 115, 115)" : "rgb(198, 40, 40)");
+  expect(styles.size).toBeCloseTo(defaultSettings.fontSize * 1.1, 2);
+}
+
 for (const mode of ["stone", "scroll", "spread", "css"] as const) {
   test(`${mode}: reads ruby continuously, pauses, resumes and stops without stale callbacks`, async ({
     page,
@@ -211,13 +236,24 @@ for (const mode of ["stone", "scroll", "spread", "css"] as const) {
       lang: "ja-JP",
       rate: 1,
     });
+    await expectHighlighted(page, "風と光が来た。");
+    const ruby = page.locator(
+      "svg .reader-rubies tspan.reader-speech-active, .css-reader-document ruby.reader-speech-active rt",
+    );
+    expect((await ruby.allTextContents()).join("")).toBe("かぜ");
+    await page.screenshot({
+      path: test.info().outputPath(`speech-highlight-${mode}.png`),
+    });
     await finish(page);
     expect((await speechCalls(page))[1].text).toBe("「次の文。」");
+    await expectHighlighted(page, "「次の文。」");
+    await expect(ruby).toHaveCount(0);
     await page
       .getByRole("button", { name: "読み上げを一時停止", exact: true })
       .click();
     await page.evaluate(() => (window as any).speechTest.staleEnd());
     expect(await speechCalls(page)).toHaveLength(2);
+    await expectHighlighted(page, "「次の文。」");
     await page
       .getByRole("button", { name: "読み上げを再開", exact: true })
       .click();
@@ -243,7 +279,31 @@ for (const mode of ["stone", "scroll", "spread", "css"] as const) {
       "data-status",
       "idle",
     );
+    await expect(
+      page.locator(".reader-page-wrap .reader-speech-active"),
+    ).toHaveCount(0);
     expect(errors).toEqual([]);
+  });
+}
+
+for (const renderingMode of ["stone", "css"] as const) {
+  test(`${renderingMode}: horizontal dark text is enlarged and restored on manual navigation`, async ({
+    page,
+  }) => {
+    await setup(page, { renderingMode, direction: "lrTb", theme: "dark" });
+    await page
+      .getByRole("button", { name: "ここから読み上げる", exact: true })
+      .click();
+    await expectHighlighted(page, "風と光が来た。", true);
+    await page.screenshot({
+      path: test
+        .info()
+        .outputPath(`speech-highlight-${renderingMode}-dark-horizontal.png`),
+    });
+    await page.getByRole("button", { name: "次のページ", exact: true }).click();
+    await expect(
+      page.locator(".reader-page-wrap .reader-speech-active"),
+    ).toHaveCount(0);
   });
 }
 
@@ -308,6 +368,9 @@ test("voice discovery, preferences, sentence following, manual navigation and co
     "data-status",
     "finished",
   );
+  await expect(
+    page.locator(".reader-page-wrap .reader-speech-active"),
+  ).toHaveCount(0);
   await page.reload({ waitUntil: "domcontentloaded" });
   await expect(page.locator(".reader-loading")).toHaveCount(0);
   await page.getByRole("button", { name: "読み上げ設定を開く" }).click();
@@ -337,6 +400,9 @@ test("errors are retryable and leaving the document cancels speech", async ({
   await start.click();
   await page.evaluate(() => (window as any).speechTest.fail("not-allowed"));
   await expect(page.getByRole("alert")).toContainText("再生ボタン");
+  await expect(
+    page.locator(".reader-page-wrap .reader-speech-active"),
+  ).toHaveCount(0);
   await start.click();
   await expect(page.getByRole("alert")).toHaveCount(0);
   await page.evaluate(() => window.dispatchEvent(new Event("pagehide")));
@@ -379,8 +445,10 @@ test("Web novels use the same speech controls in horizontal CSS mode", async ({
     .getByRole("button", { name: "ここから読み上げる", exact: true })
     .click();
   expect((await speechCalls(page))[0].text).toBe("かぜと光が来た。");
+  await expectHighlighted(page, "風と光が来た。");
   await finish(page);
   expect((await speechCalls(page))[1].text).toBe("次の文。");
+  await expectHighlighted(page, "次の文。");
 });
 
 test("unsupported browsers explain why speech is unavailable", async ({

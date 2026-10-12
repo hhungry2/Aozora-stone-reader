@@ -115,3 +115,9 @@
 .css-reader-note {
   opacity: 0.8;
 }
+.css-reader-document .reader-speech-active {
+  font-size: 1.1em;
+}
+.css-reader-document .css-reader-latin.reader-speech-active {
+  font-size: calc(1.1em * var(--css-reader-latin-scale));
+}
